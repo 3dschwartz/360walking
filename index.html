@@ -121,7 +121,7 @@
                   class="clickable"
                   animation__pulse="property: scale; dir: alternate; dur: 800; loop: true; to: 1.15 1.15 1.15"
                   hotspot-loader="target: #pano2; visibleOn: #pano1">
-          <a-entity geometry="primitive: circle; radius: 0.15"
+          <a-entity class="clickable" geometry="primitive: circle; radius: 0.15"
                     material="color: #00c8ff; shader: flat; opacity: 0.85"
                     position="0 0 0.01"></a-entity>
         </a-entity>
@@ -135,7 +135,7 @@
                   visible="false"
                   animation__pulse="property: scale; dir: alternate; dur: 800; loop: true; to: 1.15 1.15 1.15"
                   hotspot-loader="target: #pano3; visibleOn: #pano2">
-          <a-entity geometry="primitive: circle; radius: 0.15"
+          <a-entity class="clickable" geometry="primitive: circle; radius: 0.15"
                     material="color: #00c8ff; shader: flat; opacity: 0.85"
                     position="0 0 0.01"></a-entity>
         </a-entity>
@@ -149,14 +149,21 @@
                   visible="false"
                   animation__pulse="property: scale; dir: alternate; dur: 800; loop: true; to: 1.15 1.15 1.15"
                   hotspot-loader="target: #pano1; visibleOn: #pano3">
-          <a-entity geometry="primitive: circle; radius: 0.15"
+          <a-entity class="clickable" geometry="primitive: circle; radius: 0.15"
                     material="color: #00c8ff; shader: flat; opacity: 0.85"
                     position="0 0 0.01"></a-entity>
+        </a-entity>
+
+        <!-- Maus-/Touch-Cursor: reagiert auf die tatsächliche Zeiger-/Fingerposition (Desktop & Mobile) -->
+        <a-entity id="mouseCursor"
+                  cursor="rayOrigin: mouse; fuse: false"
+                  raycaster="objects: .clickable; far: 50">
         </a-entity>
 
         <a-entity id="cameraRig" position="0 1.6 0">
           <a-camera id="camera" look-controls wasd-controls="enabled: false">
             <a-entity cursor="fuse: true; fuseTimeout: 1200"
+                      raycaster="objects: .clickable; far: 50"
                       position="0 0 -1"
                       geometry="primitive: ring; radiusInner: 0.008; radiusOuter: 0.014"
                       material="color: #ffffff; shader: flat; opacity: 0.9"
