@@ -99,7 +99,18 @@
     document.querySelectorAll('[hotspot-loader]').forEach((el) => {
       const comp = el.components['hotspot-loader'];
       const visibleOnId = comp && comp.data.visibleOn ? comp.data.visibleOn.getAttribute('id') : null;
-      el.setAttribute('visible', visibleOnId === activePanoId);
+      const shouldBeVisible = visibleOnId === activePanoId;
+      el.setAttribute('visible', shouldBeVisible);
+      if (el.object3D) el.object3D.visible = shouldBeVisible;
+    });
+
+    // Raycaster-Objektlisten der beiden Cursor auffrischen, damit neu sichtbare
+    // Hotspots zuverlässig erkannt werden (Cache-Refresh nach dem Umschalten).
+    ['#mouseCursor', '#gazeCursor'].forEach((sel) => {
+      const el = document.querySelector(sel);
+      if (el && el.components && el.components.raycaster) {
+        el.components.raycaster.refreshObjects();
+      }
     });
   }
 
@@ -163,7 +174,7 @@
         <a-sky id="sky" src="#pano1" rotation="0 -90 0"></a-sky>
 
         <a-entity id="hotspot-to-2"
-		position="0.21 1.18 -3.29"
+                  position="2 0 -3"
                   geometry="primitive: ring; radiusInner: 0.25; radiusOuter: 0.4"
                   material="color: #ffffff; shader: flat; side: double"
                   look-at="#camera"
@@ -176,7 +187,7 @@
         </a-entity>
 
         <a-entity id="hotspot-to-3"
-                  position="0.21 1.18 -3.29"
+                  position="-2 0 -3"
                   geometry="primitive: ring; radiusInner: 0.25; radiusOuter: 0.4"
                   material="color: #ffffff; shader: flat; side: double"
                   look-at="#camera"
@@ -190,7 +201,7 @@
         </a-entity>
 
         <a-entity id="hotspot-to-1"
-                  position="0.21 1.18 -3.29"
+                  position="0 0 3"
                   geometry="primitive: ring; radiusInner: 0.25; radiusOuter: 0.4"
                   material="color: #ffffff; shader: flat; side: double"
                   look-at="#camera"
@@ -211,8 +222,10 @@
 
         <a-entity id="cameraRig" position="0 1.6 0">
           <a-camera id="camera" look-controls wasd-controls="enabled: false">
-            <a-entity cursor="fuse: true; fuseTimeout: 1200"
+            <a-entity id="gazeCursor"
+                      cursor="fuse: true; fuseTimeout: 1200"
                       raycaster="objects: .clickable; far: 50"
+                      visible="false"
                       position="0 0 -1"
                       geometry="primitive: ring; radiusInner: 0.008; radiusOuter: 0.014"
                       material="color: #ffffff; shader: flat; opacity: 0.9"
@@ -228,6 +241,21 @@
     document.querySelector('a-scene').addEventListener('loaded', () => {
       document.getElementById('loading').classList.add('hidden');
       setupPositionFinder();
+      setupGazeCursorToggle();
+    });
+  }
+
+  // Der Blickzeiger (Gaze Cursor) wird nur eingeblendet, solange man aktiv im
+  // VR-Modus ist (Headset). Am Desktop/Mobile-Flachbildschirm stört er sonst nur.
+  function setupGazeCursorToggle() {
+    const sceneEl = document.querySelector('a-scene');
+    const gazeCursor = document.querySelector('#gazeCursor');
+
+    sceneEl.addEventListener('enter-vr', () => {
+      gazeCursor.setAttribute('visible', true);
+    });
+    sceneEl.addEventListener('exit-vr', () => {
+      gazeCursor.setAttribute('visible', false);
     });
   }
 </script>
