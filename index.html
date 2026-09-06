@@ -23,6 +23,7 @@
 
 <div id="loading">A-Frame wird geladen...</div>
 <div id="info">Hotspot anklicken (Maus/Touch) oder anvisieren (VR-Blick) zum Weiterlaufen</div>
+<div id="debug-badge" style="display:none; position:fixed; top:12px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.75); color:#0f8; padding:6px 14px; border-radius:8px; font-size:0.85em; z-index:998; font-family:monospace;"></div>
 
 <!-- A-Frame wird per JavaScript nachgeladen (mit Fallback-CDN), damit die Seite
      bei einem blockierten/fehlerhaften CDN nicht mit "AFRAME is not defined" abbricht. -->
@@ -99,6 +100,53 @@
       const comp = el.components['hotspot-loader'];
       const visibleOnId = comp && comp.data.visibleOn ? comp.data.visibleOn.getAttribute('id') : null;
       el.setAttribute('visible', visibleOnId === activePanoId);
+    });
+  }
+
+  // Positions-Finder: Taste "P" toggelt den Debug-Modus. Im Debug-Modus zeigt ein
+  // Klick auf das Panorama die 3D-Koordinaten der angeklickten Stelle an, die man
+  // direkt als position="X Y Z" fuer einen Hotspot uebernehmen kann.
+  let debugMode = false;
+  const HOTSPOT_RADIUS = 3.5; // Abstand der Hotspots von der Kamera (an bestehende Werte angelehnt)
+
+  function setupPositionFinder() {
+    const sceneEl = document.querySelector('a-scene');
+    const skyEl = document.querySelector('#sky');
+    const badge = document.getElementById('debug-badge');
+    const raycaster = new THREE.Raycaster();
+    raycaster.far = 6000; // Sky-Radius ist standardmaessig 5000
+    const mouse = new THREE.Vector2();
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key.toLowerCase() !== 'p') return;
+      debugMode = !debugMode;
+      badge.style.display = debugMode ? 'block' : 'none';
+      badge.textContent = debugMode
+        ? 'Positions-Finder AN – auf das Panorama klicken'
+        : '';
+    });
+
+    sceneEl.canvas.addEventListener('click', (evt) => {
+      if (!debugMode) return;
+
+      const rect = sceneEl.canvas.getBoundingClientRect();
+      mouse.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+
+      const camera = sceneEl.camera;
+      raycaster.setFromCamera(mouse, camera);
+      const hits = raycaster.intersectObject(skyEl.getObject3D('mesh'), false);
+      if (!hits.length) return;
+
+      const camPos = new THREE.Vector3();
+      camera.getWorldPosition(camPos);
+
+      const direction = hits[0].point.clone().sub(camPos).normalize();
+      const pos = direction.multiplyScalar(HOTSPOT_RADIUS);
+
+      const coords = `${pos.x.toFixed(2)} ${pos.y.toFixed(2)} ${pos.z.toFixed(2)}`;
+      badge.textContent = `position="${coords}"  (siehe auch Konsole)`;
+      console.log('Hotspot-Position:', coords);
     });
   }
 
@@ -179,6 +227,7 @@
 
     document.querySelector('a-scene').addEventListener('loaded', () => {
       document.getElementById('loading').classList.add('hidden');
+      setupPositionFinder();
     });
   }
 </script>
