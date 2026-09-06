@@ -4,96 +4,50 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>360° Panorama Viewer</title>
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
 <style>
   html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; font-family: Arial, sans-serif; }
-  #loading {
-    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: #000; color: #fff; display: flex; align-items: center; justify-content: center;
-    font-size: 1.2em; z-index: 999; transition: opacity 0.4s ease; text-align: center; padding: 0 20px;
-  }
-  #loading.hidden { opacity: 0; pointer-events: none; }
   #info {
     position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
     color: #fff; background: rgba(0,0,0,0.5); padding: 6px 14px; border-radius: 8px;
     font-size: 0.85em; z-index: 998; pointer-events: none; text-align: center;
   }
+  #debug-badge {
+    display: none; position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.75); color: #0f8; padding: 6px 14px; border-radius: 8px;
+    font-size: 0.85em; z-index: 998; font-family: monospace;
+  }
 </style>
 </head>
 <body>
 
-<div id="loading">A-Frame wird geladen...</div>
 <div id="info">Hotspot anklicken (Maus/Touch) oder anvisieren (VR-Blick) zum Weiterlaufen</div>
-<div id="debug-badge" style="display:none; position:fixed; top:12px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.75); color:#0f8; padding:6px 14px; border-radius:8px; font-size:0.85em; z-index:998; font-family:monospace;"></div>
+<div id="debug-badge"></div>
 
-<!-- A-Frame wird per JavaScript nachgeladen (mit Fallback-CDN), damit die Seite
-     bei einem blockierten/fehlerhaften CDN nicht mit "AFRAME is not defined" abbricht. -->
-<div id="scene-container"></div>
-
+<!-- Custom Component: laedt beim Klick/Fuse-Klick ein neues Panorama-Bild
+     und blendet nur die zum jeweils aktiven Panorama passenden Hotspots ein. -->
 <script>
-  function loadScript(src) {
-    return new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = src;
-      s.onload = resolve;
-      s.onerror = reject;
-      document.head.appendChild(s);
-    });
-  }
+  AFRAME.registerComponent('hotspot-loader', {
+    schema: {
+      target: { type: 'selector' },     // Bild-Asset, das beim Klick geladen wird
+      visibleOn: { type: 'selector' }   // Bild-Asset, bei dem dieser Hotspot sichtbar sein soll
+    },
+    init: function () {
+      const sky = document.querySelector('#sky');
 
-  const AFRAME_SOURCES = [
-    'https://aframe.io/releases/1.5.0/aframe.min.js',
-    'https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-master.min.js',
-    'https://cdnjs.cloudflare.com/ajax/libs/aframe/1.5.0/aframe.min.js'
-  ];
+      this.el.addEventListener('click', () => {
+        if (this.data.target) {
+          const targetId = this.data.target.getAttribute('id');
+          sky.setAttribute('src', '#' + targetId);
+          updateHotspotVisibility(targetId);
+        }
+      });
 
-  async function loadAFrame() {
-    for (const src of AFRAME_SOURCES) {
-      try {
-        await loadScript(src);
-        if (window.AFRAME) return true;
-      } catch (e) {
-        console.warn('A-Frame konnte nicht geladen werden von: ' + src);
-      }
+      const currentSrc = (sky.getAttribute('src') || '').replace('#', '');
+      const currentId = currentSrc || 'pano1';
+      updateHotspotVisibility(currentId);
     }
-    return false;
-  }
-
-  loadAFrame().then((success) => {
-    if (!success) {
-      document.getElementById('loading').textContent =
-        'Fehler: A-Frame konnte von keiner Quelle geladen werden (Netzwerk/Adblocker prüfen).';
-      return;
-    }
-    document.getElementById('loading').textContent = 'Panorama wird geladen...';
-    registerHotspotComponent();
-    initScene();
   });
-
-  // Custom Component: laedt beim Klick/Fuse-Klick ein neues Panorama-Bild
-  // und blendet nur die zum jeweils aktiven Panorama passenden Hotspots ein.
-  function registerHotspotComponent() {
-    AFRAME.registerComponent('hotspot-loader', {
-      schema: {
-        target: { type: 'selector' },     // Bild-Asset, das beim Klick geladen wird
-        visibleOn: { type: 'selector' }   // Bild-Asset, bei dem dieser Hotspot sichtbar sein soll
-      },
-      init: function () {
-        const sky = document.querySelector('#sky');
-
-        this.el.addEventListener('click', () => {
-          if (this.data.target) {
-            const targetId = this.data.target.getAttribute('id');
-            sky.setAttribute('src', '#' + targetId);
-            updateHotspotVisibility(targetId);
-          }
-        });
-
-        const currentSrc = (sky.getAttribute('src') || '').replace('#', '');
-        const currentId = currentSrc || 'pano1';
-        updateHotspotVisibility(currentId);
-      }
-    });
-  }
 
   function updateHotspotVisibility(activePanoId) {
     document.querySelectorAll('[hotspot-loader]').forEach((el) => {
@@ -113,7 +67,83 @@
       }
     });
   }
+</script>
 
+<a-scene vr-mode-ui="enabled: true">
+
+  <a-assets timeout="10000">
+    <img id="pano1" crossorigin="anonymous" src="pano_01.JPG">
+    <img id="pano2" crossorigin="anonymous" src="pano_02.JPG">
+    <img id="pano3" crossorigin="anonymous" src="pano_03.JPG">
+  </a-assets>
+
+  <a-sky id="sky" src="#pano1" rotation="0 -90 0"></a-sky>
+
+  <a-entity id="hotspot-to-2"
+            position="2 0 -3"
+            geometry="primitive: ring; radiusInner: 0.25; radiusOuter: 0.4"
+            material="color: #ffffff; shader: flat; side: double"
+            look-at="#camera"
+            class="clickable"
+            animation__pulse="property: scale; dir: alternate; dur: 800; loop: true; to: 1.15 1.15 1.15"
+            hotspot-loader="target: #pano2; visibleOn: #pano1">
+    <a-entity class="clickable" geometry="primitive: circle; radius: 0.15"
+              material="color: #00c8ff; shader: flat; opacity: 0.85"
+              position="0 0 0.01"></a-entity>
+  </a-entity>
+
+  <a-entity id="hotspot-to-3"
+            position="-2 0 -3"
+            geometry="primitive: ring; radiusInner: 0.25; radiusOuter: 0.4"
+            material="color: #ffffff; shader: flat; side: double"
+            look-at="#camera"
+            class="clickable"
+            visible="false"
+            animation__pulse="property: scale; dir: alternate; dur: 800; loop: true; to: 1.15 1.15 1.15"
+            hotspot-loader="target: #pano3; visibleOn: #pano2">
+    <a-entity class="clickable" geometry="primitive: circle; radius: 0.15"
+              material="color: #00c8ff; shader: flat; opacity: 0.85"
+              position="0 0 0.01"></a-entity>
+  </a-entity>
+
+  <a-entity id="hotspot-to-1"
+            position="0 0 3"
+            geometry="primitive: ring; radiusInner: 0.25; radiusOuter: 0.4"
+            material="color: #ffffff; shader: flat; side: double"
+            look-at="#camera"
+            class="clickable"
+            visible="false"
+            animation__pulse="property: scale; dir: alternate; dur: 800; loop: true; to: 1.15 1.15 1.15"
+            hotspot-loader="target: #pano1; visibleOn: #pano3">
+    <a-entity class="clickable" geometry="primitive: circle; radius: 0.15"
+              material="color: #00c8ff; shader: flat; opacity: 0.85"
+              position="0 0 0.01"></a-entity>
+  </a-entity>
+
+  <!-- Maus-/Touch-Cursor: reagiert auf die tatsächliche Zeiger-/Fingerposition (Desktop & Mobile) -->
+  <a-entity id="mouseCursor"
+            cursor="rayOrigin: mouse; fuse: false"
+            raycaster="objects: .clickable; far: 50">
+  </a-entity>
+
+  <a-entity id="cameraRig" position="0 1.6 0">
+    <a-camera id="camera" look-controls wasd-controls="enabled: false">
+      <a-entity id="gazeCursor"
+                cursor="fuse: true; fuseTimeout: 1200"
+                raycaster="objects: .clickable; far: 50"
+                visible="false"
+                position="0 0 -1"
+                geometry="primitive: ring; radiusInner: 0.008; radiusOuter: 0.014"
+                material="color: #ffffff; shader: flat; opacity: 0.9"
+                animation__click="property: scale; startEvents: click; from: 0.1 0.1 0.1; to: 1 1 1; dur: 200"
+                animation__fusing="property: material.color; type: color; startEvents: fusing; from: #ffffff; to: #00c8ff; dur: 1200">
+      </a-entity>
+    </a-camera>
+  </a-entity>
+
+</a-scene>
+
+<script>
   // Positions-Finder: Taste "P" toggelt den Debug-Modus. Im Debug-Modus zeigt ein
   // Klick auf das Panorama die 3D-Koordinaten der angeklickten Stelle an, die man
   // direkt als position="X Y Z" fuer einen Hotspot uebernehmen kann.
@@ -161,90 +191,6 @@
     });
   }
 
-  function initScene() {
-    document.getElementById('scene-container').innerHTML = `
-      <a-scene loading-screen="enabled: false" vr-mode-ui="enabled: true">
-
-        <a-assets timeout="10000">
-          <img id="pano1" crossorigin="anonymous" src="pano_01.JPG">
-          <img id="pano2" crossorigin="anonymous" src="pano_02.JPG">
-          <img id="pano3" crossorigin="anonymous" src="pano_03.JPG">
-        </a-assets>
-
-        <a-sky id="sky" src="#pano1" rotation="0 -90 0"></a-sky>
-
-        <a-entity id="hotspot-to-2"
-                  position="2 0 -3"
-                  geometry="primitive: ring; radiusInner: 0.25; radiusOuter: 0.4"
-                  material="color: #ffffff; shader: flat; side: double"
-                  look-at="#camera"
-                  class="clickable"
-                  animation__pulse="property: scale; dir: alternate; dur: 800; loop: true; to: 1.15 1.15 1.15"
-                  hotspot-loader="target: #pano2; visibleOn: #pano1">
-          <a-entity class="clickable" geometry="primitive: circle; radius: 0.15"
-                    material="color: #00c8ff; shader: flat; opacity: 0.85"
-                    position="0 0 0.01"></a-entity>
-        </a-entity>
-
-        <a-entity id="hotspot-to-3"
-                  position="-2 0 -3"
-                  geometry="primitive: ring; radiusInner: 0.25; radiusOuter: 0.4"
-                  material="color: #ffffff; shader: flat; side: double"
-                  look-at="#camera"
-                  class="clickable"
-                  visible="false"
-                  animation__pulse="property: scale; dir: alternate; dur: 800; loop: true; to: 1.15 1.15 1.15"
-                  hotspot-loader="target: #pano3; visibleOn: #pano2">
-          <a-entity class="clickable" geometry="primitive: circle; radius: 0.15"
-                    material="color: #00c8ff; shader: flat; opacity: 0.85"
-                    position="0 0 0.01"></a-entity>
-        </a-entity>
-
-        <a-entity id="hotspot-to-1"
-                  position="0 0 3"
-                  geometry="primitive: ring; radiusInner: 0.25; radiusOuter: 0.4"
-                  material="color: #ffffff; shader: flat; side: double"
-                  look-at="#camera"
-                  class="clickable"
-                  visible="false"
-                  animation__pulse="property: scale; dir: alternate; dur: 800; loop: true; to: 1.15 1.15 1.15"
-                  hotspot-loader="target: #pano1; visibleOn: #pano3">
-          <a-entity class="clickable" geometry="primitive: circle; radius: 0.15"
-                    material="color: #00c8ff; shader: flat; opacity: 0.85"
-                    position="0 0 0.01"></a-entity>
-        </a-entity>
-
-        <!-- Maus-/Touch-Cursor: reagiert auf die tatsächliche Zeiger-/Fingerposition (Desktop & Mobile) -->
-        <a-entity id="mouseCursor"
-                  cursor="rayOrigin: mouse; fuse: false"
-                  raycaster="objects: .clickable; far: 50">
-        </a-entity>
-
-        <a-entity id="cameraRig" position="0 1.6 0">
-          <a-camera id="camera" look-controls wasd-controls="enabled: false">
-            <a-entity id="gazeCursor"
-                      cursor="fuse: true; fuseTimeout: 1200"
-                      raycaster="objects: .clickable; far: 50"
-                      visible="false"
-                      position="0 0 -1"
-                      geometry="primitive: ring; radiusInner: 0.008; radiusOuter: 0.014"
-                      material="color: #ffffff; shader: flat; opacity: 0.9"
-                      animation__click="property: scale; startEvents: click; from: 0.1 0.1 0.1; to: 1 1 1; dur: 200"
-                      animation__fusing="property: material.color; type: color; startEvents: fusing; from: #ffffff; to: #00c8ff; dur: 1200">
-            </a-entity>
-          </a-camera>
-        </a-entity>
-
-      </a-scene>
-    `;
-
-    document.querySelector('a-scene').addEventListener('loaded', () => {
-      document.getElementById('loading').classList.add('hidden');
-      setupPositionFinder();
-      setupGazeCursorToggle();
-    });
-  }
-
   // Der Blickzeiger (Gaze Cursor) wird nur eingeblendet, solange man aktiv im
   // VR-Modus ist (Headset). Am Desktop/Mobile-Flachbildschirm stört er sonst nur.
   function setupGazeCursorToggle() {
@@ -258,6 +204,11 @@
       gazeCursor.setAttribute('visible', false);
     });
   }
+
+  document.querySelector('a-scene').addEventListener('loaded', () => {
+    setupPositionFinder();
+    setupGazeCursorToggle();
+  });
 </script>
 
 </body>
