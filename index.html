@@ -81,13 +81,14 @@
 
         this.el.addEventListener('click', () => {
           if (this.data.target) {
-            sky.setAttribute('src', this.data.target);
-            updateHotspotVisibility(this.data.target.getAttribute('id'));
+            const targetId = this.data.target.getAttribute('id');
+            sky.setAttribute('src', '#' + targetId);
+            updateHotspotVisibility(targetId);
           }
         });
 
-        const currentSrc = sky.getAttribute('src');
-        const currentId = currentSrc && currentSrc.id ? currentSrc.id : 'pano1';
+        const currentSrc = (sky.getAttribute('src') || '').replace('#', '');
+        const currentId = currentSrc || 'pano1';
         updateHotspotVisibility(currentId);
       }
     });
