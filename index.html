@@ -16,37 +16,66 @@
   #info {
     position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
     color: #fff; background: rgba(0,0,0,0.5); padding: 6px 14px; border-radius: 8px;
-    font-size: 0.85em; z-index: 998; pointer-events: none;
+    font-size: 0.85em; z-index: 998; pointer-events: none; text-align: center;
   }
 </style>
 </head>
 <body>
 
 <div id="loading">Panorama wird geladen...</div>
-<div id="info">Hotspot anklicken (Maus/Touch) oder anvisieren (VR-Blick) zum Wechseln</div>
+<div id="info">Hotspot anklicken (Maus/Touch) oder anvisieren (VR-Blick) zum Weiterlaufen</div>
 
-<!-- Bild-Assets: hier eigene Panorama-URLs eintragen -->
+<!-- Bild-Assets: pano_01.JPG / pano_02.JPG / pano_03.JPG liegen im selben Verzeichnis wie index.html -->
 <a-scene loading-screen="enabled: false" vr-mode-ui="enabled: true">
 
   <a-assets timeout="10000">
-    <img id="pano1" crossorigin="anonymous"
-         src="https://cdn.aframe.io/360-image-gallery-boilerplate/img/city.jpg">
-    <img id="pano2" crossorigin="anonymous"
-         src="https://cdn.aframe.io/360-image-gallery-boilerplate/img/sechelt.jpg">
+    <img id="pano1" crossorigin="anonymous" src="pano_01.JPG">
+    <img id="pano2" crossorigin="anonymous" src="pano_02.JPG">
+    <img id="pano3" crossorigin="anonymous" src="pano_03.JPG">
   </a-assets>
 
   <!-- 360°-Himmelskugel -->
   <a-sky id="sky" src="#pano1" rotation="0 -90 0"></a-sky>
 
-  <!-- Hotspot im 3D-Raum via X/Y/Z-Koordinaten -->
-  <a-entity id="hotspot"
+  <!-- Hotspot 1: pano_01 -> pano_02 -->
+  <a-entity id="hotspot-to-2"
             position="2 0 -3"
             geometry="primitive: ring; radiusInner: 0.25; radiusOuter: 0.4"
             material="color: #ffffff; shader: flat; side: double"
             look-at="#camera"
             class="clickable"
             animation__pulse="property: scale; dir: alternate; dur: 800; loop: true; to: 1.15 1.15 1.15"
-            hotspot-loader="target: #pano2">
+            hotspot-loader="target: #pano2; visibleOn: #pano1">
+    <a-entity geometry="primitive: circle; radius: 0.15"
+              material="color: #00c8ff; shader: flat; opacity: 0.85"
+              position="0 0 0.01"></a-entity>
+  </a-entity>
+
+  <!-- Hotspot 2: pano_02 -> pano_03 -->
+  <a-entity id="hotspot-to-3"
+            position="-2 0 -3"
+            geometry="primitive: ring; radiusInner: 0.25; radiusOuter: 0.4"
+            material="color: #ffffff; shader: flat; side: double"
+            look-at="#camera"
+            class="clickable"
+            visible="false"
+            animation__pulse="property: scale; dir: alternate; dur: 800; loop: true; to: 1.15 1.15 1.15"
+            hotspot-loader="target: #pano3; visibleOn: #pano2">
+    <a-entity geometry="primitive: circle; radius: 0.15"
+              material="color: #00c8ff; shader: flat; opacity: 0.85"
+              position="0 0 0.01"></a-entity>
+  </a-entity>
+
+  <!-- Hotspot 3: pano_03 -> zurück zu pano_01 -->
+  <a-entity id="hotspot-to-1"
+            position="0 0 3"
+            geometry="primitive: ring; radiusInner: 0.25; radiusOuter: 0.4"
+            material="color: #ffffff; shader: flat; side: double"
+            look-at="#camera"
+            class="clickable"
+            visible="false"
+            animation__pulse="property: scale; dir: alternate; dur: 800; loop: true; to: 1.15 1.15 1.15"
+            hotspot-loader="target: #pano1; visibleOn: #pano3">
     <a-entity geometry="primitive: circle; radius: 0.15"
               material="color: #00c8ff; shader: flat; opacity: 0.85"
               position="0 0 0.01"></a-entity>
@@ -68,18 +97,37 @@
 </a-scene>
 
 <script>
-  // Custom Component: lädt beim Klick/Fuse-Klick ein neues Panorama-Bild
+  // Custom Component: laedt beim Klick/Fuse-Klick ein neues Panorama-Bild
+  // und blendet nur die zum jeweils aktiven Panorama passenden Hotspots ein.
   AFRAME.registerComponent('hotspot-loader', {
-    schema: { target: { type: 'selector' } },
+    schema: {
+      target: { type: 'selector' },     // Bild-Asset, das beim Klick geladen wird
+      visibleOn: { type: 'selector' }   // Bild-Asset, bei dem dieser Hotspot sichtbar sein soll
+    },
     init: function () {
+      const sky = document.querySelector('#sky');
+
       this.el.addEventListener('click', () => {
-        const sky = document.querySelector('#sky');
         if (this.data.target) {
           sky.setAttribute('src', this.data.target);
+          updateHotspotVisibility(this.data.target.getAttribute('id'));
         }
       });
+
+      // Initiale Sichtbarkeit beim Laden der Szene setzen
+      const currentSrc = sky.getAttribute('src');
+      const currentId = currentSrc && currentSrc.id ? currentSrc.id : 'pano1';
+      updateHotspotVisibility(currentId);
     }
   });
+
+  function updateHotspotVisibility(activePanoId) {
+    document.querySelectorAll('[hotspot-loader]').forEach((el) => {
+      const comp = el.components['hotspot-loader'];
+      const visibleOnId = comp && comp.data.visibleOn ? comp.data.visibleOn.getAttribute('id') : null;
+      el.setAttribute('visible', visibleOnId === activePanoId);
+    });
+  }
 
   // Ladebildschirm ausblenden, sobald die Szene bereit ist
   document.querySelector('a-scene').addEventListener('loaded', () => {
