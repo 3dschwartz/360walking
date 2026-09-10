@@ -61,15 +61,55 @@
       if (el.object3D) el.object3D.visible = shouldBeVisible;
     });
 
-    // Raycaster-Objektlisten der beiden Cursor auffrischen, damit neu sichtbare
+    // Raycaster-Objektlisten der Cursor auffrischen, damit neu sichtbare
     // Hotspots zuverlässig erkannt werden (Cache-Refresh nach dem Umschalten).
-    ['#mouseCursor', '#gazeCursor'].forEach((sel) => {
+    ['#mouseCursor', '#leftHand', '#rightHand'].forEach((sel) => {
       const el = document.querySelector(sel);
       if (el && el.components && el.components.raycaster) {
         el.components.raycaster.refreshObjects();
       }
     });
   }
+
+  // Snap-Turn: rechter Controller-Stick nach links/rechts drücken dreht die
+  // Ansicht in festen Schritten (angenehmer für VR als stufenloses Drehen).
+  AFRAME.registerComponent('snap-turn', {
+    schema: {
+      turnDegrees: { type: 'number', default: 45 },
+      deadzone: { type: 'number', default: 0.5 }
+    },
+    init: function () {
+      this.readyToTurn = true;
+      this.onAxisMove = this.onAxisMove.bind(this);
+      this.el.addEventListener('thumbstickmoved', this.onAxisMove);
+      this.el.addEventListener('axismove', this.onAxisMove);
+    },
+    onAxisMove: function (evt) {
+      // Je nach Controller-Mapping liefert entweder 'thumbstickmoved' (x/y direkt)
+      // oder 'axismove' (Array, Thumbstick meist an Index 2/3) die Stick-Werte.
+      let x;
+      if (evt.detail.x !== undefined) {
+        x = evt.detail.x;
+      } else if (evt.detail.axis && evt.detail.axis.length >= 4) {
+        x = evt.detail.axis[2];
+      } else if (evt.detail.axis && evt.detail.axis.length >= 2) {
+        x = evt.detail.axis[0];
+      } else {
+        return;
+      }
+
+      const cameraRig = document.querySelector('#cameraRig');
+      if (Math.abs(x) < this.data.deadzone) {
+        this.readyToTurn = true;
+        return;
+      }
+      if (!this.readyToTurn) return;
+
+      const degrees = x > 0 ? -this.data.turnDegrees : this.data.turnDegrees;
+      cameraRig.object3D.rotation.y += THREE.MathUtils.degToRad(degrees);
+      this.readyToTurn = false;
+    }
+  });
 </script>
 
 <a-scene vr-mode-ui="enabled: true">
@@ -138,18 +178,19 @@
             raycaster="objects: .clickable; far: 50">
   </a-entity>
 
+  <!-- Controller-Laserstrahlen für VR-Handcontroller (z.B. Quest 3): Zeigen + Trigger-Taste = Klick -->
+  <a-entity id="leftHand" laser-controls="hand: left"
+            raycaster="objects: .clickable; far: 50"
+            line="color: #00c8ff; opacity: 0.75">
+  </a-entity>
+  <a-entity id="rightHand" laser-controls="hand: right"
+            raycaster="objects: .clickable; far: 50"
+            line="color: #00c8ff; opacity: 0.75"
+            snap-turn="turnDegrees: 45">
+  </a-entity>
+
   <a-entity id="cameraRig" position="0 1.6 0">
     <a-camera id="camera" look-controls wasd-controls="enabled: false">
-      <a-entity id="gazeCursor"
-                cursor="fuse: true; fuseTimeout: 1200"
-                raycaster="objects: .clickable; far: 50"
-                visible="false"
-                position="0 0 -1"
-                geometry="primitive: ring; radiusInner: 0.008; radiusOuter: 0.014"
-                material="color: #ffffff; shader: flat; opacity: 0.9"
-                animation__click="property: scale; startEvents: click; from: 0.1 0.1 0.1; to: 1 1 1; dur: 200"
-                animation__fusing="property: material.color; type: color; startEvents: fusing; from: #ffffff; to: #00c8ff; dur: 1200">
-      </a-entity>
     </a-camera>
   </a-entity>
 
@@ -203,23 +244,8 @@
     });
   }
 
-  // Der Blickzeiger (Gaze Cursor) wird nur eingeblendet, solange man aktiv im
-  // VR-Modus ist (Headset). Am Desktop/Mobile-Flachbildschirm stört er sonst nur.
-  function setupGazeCursorToggle() {
-    const sceneEl = document.querySelector('a-scene');
-    const gazeCursor = document.querySelector('#gazeCursor');
-
-    sceneEl.addEventListener('enter-vr', () => {
-      gazeCursor.setAttribute('visible', true);
-    });
-    sceneEl.addEventListener('exit-vr', () => {
-      gazeCursor.setAttribute('visible', false);
-    });
-  }
-
   document.querySelector('a-scene').addEventListener('loaded', () => {
     setupPositionFinder();
-    setupGazeCursorToggle();
     document.querySelector('#cameraRig').setAttribute('rotation', '0 0 0'); // initialer Blickpunkt für pano1
   });
 </script>
