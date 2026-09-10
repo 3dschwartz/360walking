@@ -30,16 +30,19 @@
   AFRAME.registerComponent('hotspot-loader', {
     schema: {
       target: { type: 'selector' },     // Bild-Asset, das beim Klick geladen wird
-      visibleOn: { type: 'selector' }   // Bild-Asset, bei dem dieser Hotspot sichtbar sein soll
+      visibleOn: { type: 'selector' },  // Bild-Asset, bei dem dieser Hotspot sichtbar sein soll
+      faceYaw: { type: 'number', default: 0 } // Blickrichtung (Grad, Y-Achse), die beim Ankommen im Ziel-Panorama eingestellt wird
     },
     init: function () {
       const sky = document.querySelector('#sky');
+      const cameraRig = document.querySelector('#cameraRig');
 
       this.el.addEventListener('click', () => {
         if (this.data.target) {
           const targetId = this.data.target.getAttribute('id');
           sky.setAttribute('src', '#' + targetId);
           updateHotspotVisibility(targetId);
+          cameraRig.setAttribute('rotation', `0 ${this.data.faceYaw} 0`);
         }
       });
 
@@ -86,10 +89,13 @@
             look-at="#camera"
             class="clickable"
             animation__pulse="property: scale; dir: alternate; dur: 800; loop: true; to: 1.15 1.15 1.15"
-            hotspot-loader="target: #pano2; visibleOn: #pano1">
+            hotspot-loader="target: #pano2; visibleOn: #pano1; faceYaw: 0">
     <a-entity class="clickable" geometry="primitive: circle; radius: 0.15"
               material="color: #00c8ff; shader: flat; opacity: 0.85"
               position="0 0 0.01"></a-entity>
+    <a-text value="Höhe: 1.60 m&#10;Richtung Wohnzimmer"
+            align="center" width="2.2" color="#ffffff"
+            position="0 -0.55 0" look-at="#camera"></a-text>
   </a-entity>
 
   <a-entity id="hotspot-to-3"
@@ -100,10 +106,13 @@
             class="clickable"
             visible="false"
             animation__pulse="property: scale; dir: alternate; dur: 800; loop: true; to: 1.15 1.15 1.15"
-            hotspot-loader="target: #pano3; visibleOn: #pano2">
+            hotspot-loader="target: #pano3; visibleOn: #pano2; faceYaw: 90">
     <a-entity class="clickable" geometry="primitive: circle; radius: 0.15"
               material="color: #00c8ff; shader: flat; opacity: 0.85"
               position="0 0 0.01"></a-entity>
+    <a-text value="Höhe: 1.60 m&#10;Richtung Küche"
+            align="center" width="2.2" color="#ffffff"
+            position="0 -0.55 0" look-at="#camera"></a-text>
   </a-entity>
 
   <a-entity id="hotspot-to-1"
@@ -114,10 +123,13 @@
             class="clickable"
             visible="false"
             animation__pulse="property: scale; dir: alternate; dur: 800; loop: true; to: 1.15 1.15 1.15"
-            hotspot-loader="target: #pano1; visibleOn: #pano3">
+            hotspot-loader="target: #pano1; visibleOn: #pano3; faceYaw: 180">
     <a-entity class="clickable" geometry="primitive: circle; radius: 0.15"
               material="color: #00c8ff; shader: flat; opacity: 0.85"
               position="0 0 0.01"></a-entity>
+    <a-text value="Höhe: 1.60 m&#10;Zurück zum Eingang"
+            align="center" width="2.2" color="#ffffff"
+            position="0 -0.55 0" look-at="#camera"></a-text>
   </a-entity>
 
   <!-- Maus-/Touch-Cursor: reagiert auf die tatsächliche Zeiger-/Fingerposition (Desktop & Mobile) -->
@@ -208,6 +220,7 @@
   document.querySelector('a-scene').addEventListener('loaded', () => {
     setupPositionFinder();
     setupGazeCursorToggle();
+    document.querySelector('#cameraRig').setAttribute('rotation', '0 0 0'); // initialer Blickpunkt für pano1
   });
 </script>
 
