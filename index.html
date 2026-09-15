@@ -5,6 +5,65 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>WebXR Panorama Viewer</title>
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+  
+  <script>
+    // ---------- A-Frame Komponente für Steuerknüppel-Rotation im VR-Modus ----------
+    AFRAME.registerComponent('vr-thumbstick-rotation', {
+      schema: {
+        speed: { type: 'number', default: 90 } // Rotationsgeschwindigkeit in Grad pro Sekunde
+      },
+      init: function () {
+        this.stickX = 0;
+        this.stickY = 0;
+
+        this.onAxisMove = this.onAxisMove.bind(this);
+
+        // Event-Listener für Steuerknüppel-Bewegungen registrieren
+        this.el.addEventListener('thumbstickmoved', this.onAxisMove);
+        this.el.addEventListener('axismove', this.onAxisMove);
+      },
+      onAxisMove: function (evt) {
+        const detail = evt.detail || {};
+
+        // A-Frame thumbstickmoved liefert x und y
+        if (typeof detail.x === 'number' && typeof detail.y === 'number') {
+          this.stickX = detail.x;
+          this.stickY = detail.y;
+        } 
+        // Fallback: axismove liefert ein Array [x, y]
+        else if (detail.axis && Array.isArray(detail.axis)) {
+          this.stickX = detail.axis[0] || 0;
+          this.stickY = detail.axis[1] || 0;
+        }
+      },
+      tick: function (time, delta) {
+        const DEADZONE = 0.15; // Deadzone verhindern Ruckeln bei ungenauen Knüppeln
+
+        if (Math.abs(this.stickX) < DEADZONE && Math.abs(this.stickY) < DEADZONE) {
+          return;
+        }
+
+        const dt = delta / 1000; // Vergangene Zeit in Sekunden
+        const sky = document.querySelector('#sky');
+        if (!sky) return;
+
+        // Aktuelle Rotation des Panoramas (a-sky) abrufen
+        const rot = sky.getAttribute('rotation') || { x: 0, y: 0, z: 0 };
+
+        // Horizontaler Stick (X) -> Yaw / Horizontale Rotation des Bildes
+        // Vertikaler Stick (Y)   -> Pitch / Vertikale Rotation des Bildes
+        let newY = rot.y - (this.stickX * this.data.speed * dt);
+        let newX = rot.x + (this.stickY * (this.data.speed * 0.7) * dt);
+
+        // Vertikalen Winkel begrenzen (-85° bis +85°), um Überschlagen zu verhindern
+        newX = Math.max(-85, Math.min(85, newX));
+
+        // Neue Rotation auf das Panorama anwenden
+        sky.setAttribute('rotation', `${newX} ${newY} ${rot.z}`);
+      }
+    });
+  </script>
+
   <style>
     * {
       box-sizing: border-box;
@@ -112,7 +171,7 @@
       font-family: inherit;
       font-size: 11px;
     }
-    /* Hide UI panel when in immersive VR (optional enhancement) */
+    /* UI Panel im VR Mode ausblenden */
     a-scene[data-is-vr="true"] ~ #ui-panel {
       display: none;
     }
@@ -142,7 +201,7 @@
     <div class="hint">
       <kbd>P</kbd> drücken oder Button → dann in das Panorama klicken, um den Blickpunkt zu lesen und in die Zwischenablage zu kopieren.<br>
       Maus ziehen / Touch / VR-Headset: in alle Achsen schauen.<br>
-      <strong>Quest 3:</strong> Rechter Steuerknüppel = Blick drehen (alle Achsen).
+      <strong>Quest 3 / VR:</strong> Steuerknüppel der Controller = Panoramabild drehen.
     </div>
   </div>
 
@@ -190,15 +249,18 @@
       </a-camera>
     </a-entity>
 
-    <!-- VR / XR controllers with laser -->
+    <!-- VR / XR controllers with laser and thumbstick rotation -->
     <a-entity
       id="leftHand"
       laser-controls="hand: left"
+      vr-thumbstick-rotation="speed: 90"
       raycaster="objects: .clickable; far: 10; lineColor: #7dd3fc; lineOpacity: 0.6"
     ></a-entity>
+
     <a-entity
       id="rightHand"
       laser-controls="hand: right"
+      vr-thumbstick-rotation="speed: 90"
       raycaster="objects: .clickable; far: 10; lineColor: #7dd3fc; lineOpacity: 0.6"
     ></a-entity>
 
@@ -320,22 +382,14 @@
       function sampleViewpoint(intersection) {
         if (!intersection) return;
 
-        // intersection.point is in world space on the sky sphere
-        // We compute the direction from origin (camera is near origin) to that point
-        // and convert to Euler rotation that the camera should have to look there.
         const point = intersection.point;
         const dir = new THREE.Vector3(point.x, point.y, point.z).normalize();
 
-        // A-Frame / Three.js camera looks down -Z by default.
-        // Convert direction to yaw (Y) and pitch (X)
-        const yaw = Math.atan2(-dir.x, -dir.z) * (180 / Math.PI);   // degrees
-        const pitch = Math.asin(dir.y) * (180 / Math.PI);           // degrees
+        const yaw = Math.atan2(-dir.x, -dir.z) * (180 / Math.PI);
+        const pitch = Math.asin(dir.y) * (180 / Math.PI);
 
-        // Format: "pitch yaw 0"  (A-Frame rotation order is typically YXZ / pitch yaw roll)
-        // A-Frame rotation attribute is "x y z" = pitch yaw roll
         const rotStr = `${pitch.toFixed(2)} ${yaw.toFixed(2)} 0`;
 
-        // Also include UV for completeness (useful for some pipelines)
         let uvStr = '';
         if (intersection.uv) {
           uvStr = ` | UV: ${intersection.uv.x.toFixed(4)},${intersection.uv.y.toFixed(4)}`;
@@ -343,11 +397,9 @@
 
         const full = rotStr + uvStr;
 
-        // Copy pure rotation string (most useful for applying later)
         navigator.clipboard.writeText(rotStr).then(() => {
           viewpointInput.value = rotStr;
           console.log('Blickpunkt kopiert:', full);
-          // Brief visual feedback
           sampleBtn.textContent = 'Kopiert!';
           setTimeout(() => setSampleMode(false), 900);
         }).catch(err => {
@@ -369,7 +421,6 @@
       // Keyboard P
       window.addEventListener('keydown', (e) => {
         if (e.key === 'p' || e.key === 'P') {
-          // Ignore if typing in an input
           if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
           e.preventDefault();
           setSampleMode(!sampleMode);
@@ -385,7 +436,6 @@
         const val = viewpointInput.value.trim();
         if (!val) return;
 
-        // Accept either "pitch yaw roll" or just "pitch yaw"
         const parts = val.split(/[\s,;]+/).map(parseFloat).filter(n => !isNaN(n));
         if (parts.length < 2) {
           alert('Ungültiges Format. Erwarte z.B. „12.34 -90.00 0“');
@@ -396,7 +446,6 @@
         const yaw = parts[1];
         const roll = parts[2] || 0;
 
-        // Temporarily disable look-controls so we can set rotation cleanly
         const lookControls = cam.components['look-controls'];
         if (lookControls) {
           lookControls.pause();
@@ -404,10 +453,8 @@
 
         cam.setAttribute('rotation', { x: pitch, y: yaw, z: roll });
 
-        // Re-enable after a short delay so the new orientation is kept
         setTimeout(() => {
           if (lookControls) {
-            // Sync internal pitch/yaw of look-controls with the new rotation
             if (typeof lookControls.pitchObject !== 'undefined') {
               lookControls.pitchObject.rotation.x = THREE.MathUtils.degToRad(pitch);
               lookControls.yawObject.rotation.y = THREE.MathUtils.degToRad(yaw);
@@ -416,7 +463,6 @@
           }
         }, 50);
 
-        // Optional: show alias somewhere – for now just log
         const alias = aliasInput.value.trim();
         if (alias) {
           console.log(`Alias „${alias}“ → Blickpunkt ${pitch.toFixed(2)} ${yaw.toFixed(2)} ${roll}`);
@@ -424,7 +470,7 @@
         }
       });
 
-      // ---------- Enter / exit VR detection (optional UI hide) ----------
+      // ---------- Enter / exit VR detection ----------
       scene.addEventListener('enter-vr', () => {
         scene.dataset.isVr = 'true';
       });
@@ -432,68 +478,8 @@
         scene.dataset.isVr = 'false';
       });
 
-      // ---------- Quest 3 / VR: Rechter Steuerknüppel = Blick drehen ----------
-      // Zuverlässige Version: Stick-Werte speichern + jeden Frame anwenden
-      const rightHand = document.querySelector('#rightHand');
-      const rig = document.querySelector('#rig');
-
-      let stickX = 0;
-      let stickY = 0;
-
-      const DEADZONE = 0.15;
-      const YAW_SPEED = 2.8;    // Horizontal – spürbar schnell
-      const PITCH_SPEED = 2.2;  // Vertikal
-
-      function onStickMoved(evt) {
-        // Unterstützt sowohl thumbstickmoved als auch axismove
-        const detail = evt.detail || {};
-        stickX = detail.x !== undefined ? detail.x : (detail.axis ? detail.axis.x : 0);
-        stickY = detail.y !== undefined ? detail.y : (detail.axis ? detail.axis.y : 0);
-      }
-
-      if (rightHand) {
-        rightHand.addEventListener('thumbstickmoved', onStickMoved);
-        rightHand.addEventListener('axismove', onStickMoved); // Fallback für manche Browser
-      }
-
-      // Jeden Frame die Rotation anwenden (wichtig für flüssige Bewegung)
-      scene.addEventListener('renderstart', () => {
-        const tick = () => {
-          if (Math.abs(stickX) > DEADZONE || Math.abs(stickY) > DEADZONE) {
-            const look = cam.components['look-controls'];
-
-            // Yaw (links/rechts) → am Rig drehen (fühlt sich am natürlichsten an)
-            if (rig) {
-              const currentYaw = rig.object3D.rotation.y;
-              rig.object3D.rotation.y = currentYaw - stickX * YAW_SPEED * (Math.PI / 180);
-            }
-
-            // Pitch (hoch/runter) → über look-controls, damit Kopf + Stick zusammenarbeiten
-            if (look && look.pitchObject) {
-              look.pitchObject.rotation.x += stickY * PITCH_SPEED * (Math.PI / 180);
-
-              // Begrenzung ±85°
-              const max = 85 * (Math.PI / 180);
-              look.pitchObject.rotation.x = Math.max(-max, Math.min(max, look.pitchObject.rotation.x));
-            }
-          }
-
-          requestAnimationFrame(tick);
-        };
-        tick();
-      });
-
       // Start with first panorama
       loadPano(1);
-
-      // Make sure assets are loaded
-      scene.addEventListener('loaded', () => {
-        console.log('A-Frame Scene bereit. Bilder:', 
-          document.querySelector('#pano1').complete,
-          document.querySelector('#pano2').complete,
-          document.querySelector('#pano3').complete
-        );
-      });
     })();
   </script>
 </body>
