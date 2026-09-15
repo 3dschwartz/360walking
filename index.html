@@ -17,152 +17,90 @@
     background: rgba(0,0,0,0.75); color: #0f8; padding: 6px 14px; border-radius: 8px;
     font-size: 0.85em; z-index: 998; font-family: monospace;
   }
+  /* Navigations-Menü auf der linken Bildseite */
+  #menu {
+    position: fixed; left: 12px; top: 50%; transform: translateY(-50%);
+    z-index: 999; display: flex; flex-direction: column; gap: 8px;
+  }
+  .menu-item {
+    color: #fff; background: rgba(0,0,0,0.55); padding: 8px 16px; border-radius: 8px;
+    cursor: pointer; user-select: none; font-size: 0.95em; transition: background 0.15s;
+  }
+  .menu-item:hover { background: rgba(0,0,0,0.85); }
+  .menu-item.active { background: #00c8ff; color: #000; font-weight: bold; }
 </style>
 </head>
 <body>
 
-<div id="info">Hotspot anklicken (Maus/Touch) oder anvisieren (VR-Blick) &ndash; die Kamera richtet sich automatisch auf den n&auml;chsten Hotspot aus</div>
+<div id="menu"></div>
+<div id="info">Links im Menü auf einen Eintrag klicken, um das Panorama zu wechseln &ndash; Taste P: Blickrichtung auslesen</div>
 <div id="debug-badge"></div>
 
 <script>
 /* ============================================================================
    KONFIGURATION  –  HIER EINTRÄGE BEARBEITEN, NICHTS WEITER UNTEN IM HTML!
    ----------------------------------------------------------------------------
-   Pro Marker ein Block in der Liste HOTSPOTS:
+   Pro Panorama ein Block in der Liste PANORAMAS:
 
-     id:        eindeutiger Name (frei wählbar, keine Leerzeichen)
-     position:  "X Y Z"  – die mit Taste P ausgelesene Position
-     text:      Beschriftung unter dem Marker (\n = Zeilenumbruch)
-     visibleOn: ID des Panoramas, in dem der Marker sichtbar ist
-     target:    ID des Panoramas, das beim Anklicken geladen wird
-
-   Die Kamera schaut beim Betreten eines Panoramas automatisch auf den
-   ERSTEN Marker in dieser Liste, dessen visibleOn zum Panorama passt.
-   (faceYaw, optional: eigene Blickrichtung in Grad statt Auto-Ausrichtung)
+     id:      eindeutiger Name (frei wählbar, keine Leerzeichen)
+     file:    Dateiname des Panorama-Bildes (muss neben der index.html liegen)
+     label:   Textzeile im Menü auf der linken Bildseite
+     viewYaw: Blickrichtung der Kamera beim Laden, in Grad (0 = geradeaus/-Z).
+              Mit Taste P bestimmen: P drücken, im Bild auf die gewünschte
+              Richtung klicken, Wert hier eintragen.
    ============================================================================ */
 
-const HOTSPOTS = [
-  {
-    id: 'hotspot-to-2',
-    position: '1.05 0.03 -3.34',   // <-- Position mit Taste P ausgelesen
-    text: 'Höhe: 1.90 m\nRichtung AAAA',
-    visibleOn: 'pano1',
-    target: 'pano2'
-  },
-  {
-    id: 'hotspot-to-3',
-    position: '-2 0 -3',
-    text: 'Höhe: 1.60 m\BBBBBB',
-    visibleOn: 'pano2',
-    target: 'pano3'
-  },
-  {
-    id: 'hotspot-to-1',
-    position: '0 0 3',
-    text: 'Höhe: 1.60 m\CCCCCCC',
-    visibleOn: 'pano3',
-    target: 'pano1'
-  }
+const PANORAMAS = [
+  { id: 'pano1', file: 'pano_01.JPG', label: 'Eingang / Raum 1', viewYaw: 0 },
+  { id: 'pano2', file: 'pano_02.JPG', label: 'Küche',            viewYaw: 0 },
+  { id: 'pano3', file: 'pano_03.JPG', label: 'Wohnzimmer',       viewYaw: 0 }
 ];
 
 /* ===================== Ende der Konfiguration ============================ */
 
 
-// Custom Component: laedt beim Klick/Fuse-Klick ein neues Panorama-Bild
-// und blendet nur die zum jeweils aktiven Panorama passenden Hotspots ein.
-AFRAME.registerComponent('hotspot-loader', {
-  schema: {
-    target: { type: 'selector' },     // Bild-Asset, das beim Klick geladen wird
-    visibleOn: { type: 'selector' }   // Bild-Asset, bei dem dieser Hotspot sichtbar sein soll
-  },
-  init: function () {
-    const sky = document.querySelector('#sky');
+// Laedt ein Panorama und richtet die Kamera auf die konfigurierte Blickrichtung.
+function loadPano(id) {
+  const pano = PANORAMAS.find(p => p.id === id);
+  if (!pano) return;
 
-    this.el.addEventListener('click', () => {
-      if (!this.data.target) return;
-      const targetId = this.data.target.getAttribute('id');
-      sky.setAttribute('src', '#' + targetId);
-      updateHotspotVisibility(targetId);
-      // Kamera automatisch auf den ersten Hotspot des neuen Panoramas ausrichten
-      faceFirstHotspot(targetId);
-    });
-  }
-});
+  document.querySelector('#sky').setAttribute('src', '#' + id);
 
-// Baut aus dem Hotspot sichtbar / unsichtbar, je nach aktivem Panorama
-function updateHotspotVisibility(activePanoId) {
-  document.querySelectorAll('[hotspot-loader]').forEach((el) => {
-    const comp = el.components['hotspot-loader'];
-    const visibleOnId = comp && comp.data.visibleOn ? comp.data.visibleOn.getAttribute('id') : null;
-    const shouldBeVisible = visibleOnId === activePanoId;
-    el.setAttribute('visible', shouldBeVisible);
-    if (el.object3D) el.object3D.visible = shouldBeVisible;
-  });
-
-  // Raycaster-Objektlisten der Cursor auffrischen, damit neu sichtbare
-  // Hotspots zuverlässig erkannt werden (Cache-Refresh nach dem Umschalten).
-  ['#mouseCursor', '#leftHand', '#rightHand'].forEach((sel) => {
-    const el = document.querySelector(sel);
-    if (el && el.components && el.components.raycaster) {
-      el.components.raycaster.refreshObjects();
-    }
-  });
-}
-
-// Dreht die Kamera so, dass der erste sichtbare Hotspot des Panoramas
-// exakt in der Bildmitte liegt (nur horizontale Ausrichtung / Yaw).
-function faceFirstHotspot(panoId) {
-  const hs = HOTSPOTS.find(h => h.visibleOn === panoId);
   const cameraRig = document.querySelector('#cameraRig');
   const camera = document.querySelector('#camera');
-  if (!hs || !cameraRig) return;
-
-  let yaw;
-  if (hs.faceYaw !== undefined) {
-    yaw = hs.faceYaw; // manuelle Vorgabe aus der Konfiguration
-  } else {
-    const parts = hs.position.trim().split(/\s+/).map(Number);
-    const x = parts[0], z = parts[2];
-    // Yaw-Winkel, mit dem die Blickrichtung (-Z) auf den Punkt (x,z) zeigt
-    yaw = Math.atan2(-x, -z) * 180 / Math.PI;
-  }
-
-  cameraRig.setAttribute('rotation', `0 ${yaw.toFixed(2)} 0`);
+  cameraRig.setAttribute('rotation', `0 ${pano.viewYaw} 0`);
   // Kamera-Eigenrotation (z. B. durch Maus-Drehen) zurücksetzen,
-  // sonst addiert sie sich auf die Rig-Drehung und der Marker wandert aus der Mitte.
-  if (camera) camera.setAttribute('rotation', '0 0 0');
+  // sonst addiert sie sich auf die Rig-Drehung.
+  camera.setAttribute('rotation', '0 0 0');
+
+  // Aktiven Menüeintrag hervorheben
+  document.querySelectorAll('.menu-item').forEach((el) => {
+    el.classList.toggle('active', el.dataset.panoId === id);
+  });
 }
 
-// Erzeugt die Hotspot-Entities aus der Konfigurationsliste HOTSPOTS
-function buildHotspots() {
-  const scene = document.querySelector('a-scene');
-  HOTSPOTS.forEach((hs) => {
-    const el = document.createElement('a-entity');
-    el.setAttribute('id', hs.id);
-    el.setAttribute('position', hs.position);
-    el.setAttribute('geometry', 'primitive: ring; radiusInner: 0.25; radiusOuter: 0.4');
-    el.setAttribute('material', 'color: #ffffff; shader: flat; side: double');
-    el.setAttribute('look-at', '#camera');
-    el.classList.add('clickable');
-    el.setAttribute('hotspot-loader', `target: #${hs.target}; visibleOn: #${hs.visibleOn}`);
+// Erzeugt die <img>-Assets für alle konfigurierten Panoramen
+function buildAssets() {
+  const assets = document.querySelector('a-assets');
+  PANORAMAS.forEach((p) => {
+    const img = document.createElement('img');
+    img.setAttribute('id', p.id);
+    img.setAttribute('crossorigin', 'anonymous');
+    img.setAttribute('src', p.file);
+    assets.appendChild(img);
+  });
+}
 
-    const dot = document.createElement('a-entity');
-    dot.classList.add('clickable');
-    dot.setAttribute('geometry', 'primitive: circle; radius: 0.15');
-    dot.setAttribute('material', 'color: #00c8ff; shader: flat; opacity: 0.85');
-    dot.setAttribute('position', '0 0 0.01');
-    el.appendChild(dot);
-
-    const label = document.createElement('a-text');
-    label.setAttribute('value', hs.text);
-    label.setAttribute('align', 'center');
-    label.setAttribute('width', '4.5');
-    label.setAttribute('color', '#000000');
-    label.setAttribute('position', '0 -0.7 0');
-    label.setAttribute('look-at', '#camera');
-    el.appendChild(label);
-
-    scene.appendChild(el);
+// Erzeugt das Navigations-Menü auf der linken Bildseite
+function buildMenu() {
+  const menu = document.getElementById('menu');
+  PANORAMAS.forEach((p) => {
+    const item = document.createElement('div');
+    item.className = 'menu-item';
+    item.dataset.panoId = p.id;
+    item.textContent = p.label;
+    item.addEventListener('click', () => loadPano(p.id));
+    menu.appendChild(item);
   });
 }
 
@@ -210,29 +148,13 @@ AFRAME.registerComponent('snap-turn', {
 <a-scene vr-mode-ui="enabled: true">
 
   <a-assets timeout="10000">
-    <img id="pano1" crossorigin="anonymous" src="pano_01.JPG">
-    <img id="pano2" crossorigin="anonymous" src="pano_02.JPG">
-    <img id="pano3" crossorigin="anonymous" src="pano_03.JPG">
+    <!-- Panorama-Bilder werden automatisch aus der Konfiguration erzeugt -->
   </a-assets>
 
-  <a-sky id="sky" src="#pano1" rotation="0 -90 0"></a-sky>
+  <a-sky id="sky" rotation="0 -90 0"></a-sky>
 
-  <!-- Maus-/Touch-Cursor: reagiert auf die tatsächliche Zeiger-/Fingerposition (Desktop & Mobile) -->
-  <a-entity id="mouseCursor"
-            cursor="rayOrigin: mouse; fuse: false"
-            raycaster="objects: .clickable; far: 50">
-  </a-entity>
-
-  <!-- Controller-Laserstrahlen für VR-Handcontroller (z.B. Quest 3): Zeigen + Trigger-Taste = Klick -->
-  <a-entity id="leftHand" laser-controls="hand: left"
-            raycaster="objects: .clickable; far: 50"
-            line="color: #00c8ff; opacity: 0.75">
-  </a-entity>
-  <a-entity id="rightHand" laser-controls="hand: right"
-            raycaster="objects: .clickable; far: 50"
-            line="color: #00c8ff; opacity: 0.75"
-            snap-turn="turnDegrees: 45">
-  </a-entity>
+  <!-- Rechter Controller nur noch für Snap-Turn (keine klickbaren Objekte mehr in der Szene) -->
+  <a-entity id="rightHand" snap-turn="turnDegrees: 45"></a-entity>
 
   <a-entity id="cameraRig" position="0 1.6 0">
     <a-camera id="camera" look-controls wasd-controls="enabled: false">
@@ -242,13 +164,12 @@ AFRAME.registerComponent('snap-turn', {
 </a-scene>
 
 <script>
-  // Positions-Finder: Taste "P" toggelt den Debug-Modus. Im Debug-Modus zeigt ein
-  // Klick auf das Panorama die 3D-Koordinaten der angeklickten Stelle an, die man
-  // direkt in die HOTSPOTS-Liste oben in der Datei übernehmen kann.
+  // Blickrichtungs-Finder: Taste "P" toggelt den Debug-Modus. Im Debug-Modus
+  // auf eine Stelle im Panorama klicken – angezeigt wird der viewYaw-Wert
+  // (Grad), den du in die PANORAMAS-Liste oben in der Datei übernimmst.
   let debugMode = false;
-  const HOTSPOT_RADIUS = 3.5; // Abstand der Hotspots von der Kamera (an bestehende Werte angelehnt)
 
-  function setupPositionFinder() {
+  function setupYawFinder() {
     const sceneEl = document.querySelector('a-scene');
     const skyEl = document.querySelector('#sky');
     const badge = document.getElementById('debug-badge');
@@ -261,7 +182,7 @@ AFRAME.registerComponent('snap-turn', {
       debugMode = !debugMode;
       badge.style.display = debugMode ? 'block' : 'none';
       badge.textContent = debugMode
-        ? 'Positions-Finder AN – auf das Panorama klicken'
+        ? 'Blickrichtungs-Finder AN – ins Bild klicken, um viewYaw zu bestimmen'
         : '';
     });
 
@@ -277,26 +198,23 @@ AFRAME.registerComponent('snap-turn', {
       const hits = raycaster.intersectObject(skyEl.getObject3D('mesh'), false);
       if (!hits.length) return;
 
-      const camPos = new THREE.Vector3();
-      camera.getWorldPosition(camPos);
+      // Horizontale Blickrichtung (Yaw) aus der Richtung des Klick-Strahls:
+      // 0° = Blick nach -Z, positive Werte drehen nach links (gegen Uhrzeigersinn).
+      const dir = raycaster.ray.direction;
+      const yaw = Math.atan2(-dir.x, -dir.z) * 180 / Math.PI;
+      const yawRounded = Math.round(yaw * 10) / 10;
 
-      const direction = hits[0].point.clone().sub(camPos).normalize();
-      // WICHTIG: Die Richtung wurde relativ zur Kamera berechnet, also muss die
-      // Kameraposition wieder addiert werden. Sonst liegt der Marker 1,6 m zu tief.
-      const pos = camPos.clone().add(direction.multiplyScalar(HOTSPOT_RADIUS));
-
-      const coords = `${pos.x.toFixed(2)} ${pos.y.toFixed(2)} ${pos.z.toFixed(2)}`;
-      badge.textContent = `position="${coords}"  (siehe auch Konsole)`;
-      console.log('Hotspot-Position:', coords);
+      const currentPano = (skyEl.getAttribute('src') || '').replace('#', '');
+      badge.textContent = `viewYaw: ${yawRounded}  (für "${currentPano}" in die Konfiguration übernehmen)`;
+      console.log(`viewYaw für ${currentPano}:`, yawRounded);
     });
   }
 
   document.querySelector('a-scene').addEventListener('loaded', () => {
-    buildHotspots();
-    setupPositionFinder();
-    const startPano = (document.querySelector('#sky').getAttribute('src') || '#pano1').replace('#', '');
-    updateHotspotVisibility(startPano);
-    faceFirstHotspot(startPano); // Startansicht: Blick auf den ersten Marker
+    buildAssets();
+    buildMenu();
+    setupYawFinder();
+    loadPano(PANORAMAS[0].id); // Start-Panorama = erster Eintrag in der Konfiguration
   });
 </script>
 
