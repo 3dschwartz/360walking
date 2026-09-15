@@ -141,7 +141,8 @@
 
     <div class="hint">
       <kbd>P</kbd> drücken oder Button → dann in das Panorama klicken, um den Blickpunkt zu lesen und in die Zwischenablage zu kopieren.<br>
-      Maus ziehen / Touch / VR-Headset: in alle Achsen schauen.
+      Maus ziehen / Touch / VR-Headset: in alle Achsen schauen.<br>
+      <strong>Quest 3:</strong> Rechter Steuerknüppel = Blick drehen (alle Achsen).
     </div>
   </div>
 
@@ -430,6 +431,45 @@
       scene.addEventListener('exit-vr', () => {
         scene.dataset.isVr = 'false';
       });
+
+      // ---------- Quest / VR: Thumbstick rotation (rechter Controller) ----------
+      // Ermöglicht das Drehen des Blicks mit dem rechten Steuerknüppel in allen Achsen
+      const rightHand = document.querySelector('#rightHand');
+      const THUMBSTICK_SPEED = 1.8;      // Empfindlichkeit (höher = schneller)
+      const DEADZONE = 0.12;             // Kleiner Totbereich gegen Drift
+
+      if (rightHand) {
+        rightHand.addEventListener('thumbstickmoved', (evt) => {
+          const x = evt.detail.x; // links/rechts → Yaw
+          const y = evt.detail.y; // vorne/hinten → Pitch
+
+          // Totbereich
+          if (Math.abs(x) < DEADZONE && Math.abs(y) < DEADZONE) return;
+
+          const lookControls = cam.components['look-controls'];
+          if (!lookControls || !lookControls.yawObject || !lookControls.pitchObject) {
+            // Fallback falls look-controls noch nicht bereit ist
+            const rot = cam.getAttribute('rotation') || { x: 0, y: 0, z: 0 };
+            rot.y -= x * THUMBSTICK_SPEED;
+            rot.x += y * THUMBSTICK_SPEED;
+            // Pitch begrenzen
+            rot.x = Math.max(-85, Math.min(85, rot.x));
+            cam.setAttribute('rotation', rot);
+            return;
+          }
+
+          // Saubere Integration in look-controls (damit Kopfbewegung + Stick zusammen funktionieren)
+          lookControls.yawObject.rotation.y -= x * THUMBSTICK_SPEED * (Math.PI / 180);
+          lookControls.pitchObject.rotation.x += y * THUMBSTICK_SPEED * (Math.PI / 180);
+
+          // Pitch begrenzen (ca. ±85°)
+          const maxPitch = 85 * (Math.PI / 180);
+          lookControls.pitchObject.rotation.x = Math.max(
+            -maxPitch,
+            Math.min(maxPitch, lookControls.pitchObject.rotation.x)
+          );
+        });
+      }
 
       // Start with first panorama
       loadPano(1);
