@@ -124,7 +124,7 @@
 
   <a-entity id="hotspot-to-2"
             position="1.05 0.03 -3.34"
-            geometry="primitive: ring; radiusInner: 0.25; radiusOuter: 0.4"
+            geometry="primitive: ring; radiusInner: 0.25; radiusOuter: 0.9"
             material="color: #ffffff; shader: flat; side: double"
             look-at="#camera"
             class="clickable"
@@ -132,7 +132,7 @@
     <a-entity class="clickable" geometry="primitive: circle; radius: 0.15"
               material="color: #00c8ff; shader: flat; opacity: 0.85"
               position="0 0 0.01"></a-entity>
-    <a-text value="Höhe: 1.90 m&#10;Richtung zzzzz"
+    <a-text value="Höhe: 1.90 m&#10;Richtung yyyyyyyyy"
             align="center" width="4.5" color="#000000"
             position="0 -0.7 0" look-at="#camera"></a-text>
   </a-entity>
@@ -233,7 +233,9 @@
       camera.getWorldPosition(camPos);
 
       const direction = hits[0].point.clone().sub(camPos).normalize();
-      const pos = direction.multiplyScalar(HOTSPOT_RADIUS);
+      // WICHTIG: Die Richtung wurde relativ zur Kamera berechnet, also muss die
+      // Kameraposition wieder addiert werden. Sonst liegt der Marker 1,6 m zu tief.
+      const pos = camPos.clone().add(direction.multiplyScalar(HOTSPOT_RADIUS));
 
       const coords = `${pos.x.toFixed(2)} ${pos.y.toFixed(2)} ${pos.z.toFixed(2)}`;
       badge.textContent = `position="${coords}"  (siehe auch Konsole)`;
