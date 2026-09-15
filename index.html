@@ -225,7 +225,7 @@
         animation__leave="property: scale; to: 1 1 1; startEvents: mouseleave; dur: 120"
       >
         <a-text
-          value="x – xano_x1"
+          value="1 – pano_01"
           align="center"
           width="2.8"
           color="#e2e8f0"
@@ -244,7 +244,7 @@
         animation__leave="property: scale; to: 1 1 1; startEvents: mouseleave; dur: 120"
       >
         <a-text
-          value="y – pano_y2"
+          value="2 – pano_02"
           align="center"
           width="2.8"
           color="#e2e8f0"
@@ -432,44 +432,56 @@
         scene.dataset.isVr = 'false';
       });
 
-      // ---------- Quest / VR: Thumbstick rotation (rechter Controller) ----------
-      // Ermöglicht das Drehen des Blicks mit dem rechten Steuerknüppel in allen Achsen
+      // ---------- Quest 3 / VR: Rechter Steuerknüppel = Blick drehen ----------
+      // Zuverlässige Version: Stick-Werte speichern + jeden Frame anwenden
       const rightHand = document.querySelector('#rightHand');
-      const THUMBSTICK_SPEED = 1.8;      // Empfindlichkeit (höher = schneller)
-      const DEADZONE = 0.12;             // Kleiner Totbereich gegen Drift
+      const rig = document.querySelector('#rig');
+
+      let stickX = 0;
+      let stickY = 0;
+
+      const DEADZONE = 0.15;
+      const YAW_SPEED = 2.8;    // Horizontal – spürbar schnell
+      const PITCH_SPEED = 2.2;  // Vertikal
+
+      function onStickMoved(evt) {
+        // Unterstützt sowohl thumbstickmoved als auch axismove
+        const detail = evt.detail || {};
+        stickX = detail.x !== undefined ? detail.x : (detail.axis ? detail.axis.x : 0);
+        stickY = detail.y !== undefined ? detail.y : (detail.axis ? detail.axis.y : 0);
+      }
 
       if (rightHand) {
-        rightHand.addEventListener('thumbstickmoved', (evt) => {
-          const x = evt.detail.x; // links/rechts → Yaw
-          const y = evt.detail.y; // vorne/hinten → Pitch
+        rightHand.addEventListener('thumbstickmoved', onStickMoved);
+        rightHand.addEventListener('axismove', onStickMoved); // Fallback für manche Browser
+      }
 
-          // Totbereich
-          if (Math.abs(x) < DEADZONE && Math.abs(y) < DEADZONE) return;
+      // Jeden Frame die Rotation anwenden (wichtig für flüssige Bewegung)
+      scene.addEventListener('renderstart', () => {
+        const tick = () => {
+          if (Math.abs(stickX) > DEADZONE || Math.abs(stickY) > DEADZONE) {
+            const look = cam.components['look-controls'];
 
-          const lookControls = cam.components['look-controls'];
-          if (!lookControls || !lookControls.yawObject || !lookControls.pitchObject) {
-            // Fallback falls look-controls noch nicht bereit ist
-            const rot = cam.getAttribute('rotation') || { x: 0, y: 0, z: 0 };
-            rot.y -= x * THUMBSTICK_SPEED;
-            rot.x += y * THUMBSTICK_SPEED;
-            // Pitch begrenzen
-            rot.x = Math.max(-85, Math.min(85, rot.x));
-            cam.setAttribute('rotation', rot);
-            return;
+            // Yaw (links/rechts) → am Rig drehen (fühlt sich am natürlichsten an)
+            if (rig) {
+              const currentYaw = rig.object3D.rotation.y;
+              rig.object3D.rotation.y = currentYaw - stickX * YAW_SPEED * (Math.PI / 180);
+            }
+
+            // Pitch (hoch/runter) → über look-controls, damit Kopf + Stick zusammenarbeiten
+            if (look && look.pitchObject) {
+              look.pitchObject.rotation.x += stickY * PITCH_SPEED * (Math.PI / 180);
+
+              // Begrenzung ±85°
+              const max = 85 * (Math.PI / 180);
+              look.pitchObject.rotation.x = Math.max(-max, Math.min(max, look.pitchObject.rotation.x));
+            }
           }
 
-          // Saubere Integration in look-controls (damit Kopfbewegung + Stick zusammen funktionieren)
-          lookControls.yawObject.rotation.y -= x * THUMBSTICK_SPEED * (Math.PI / 180);
-          lookControls.pitchObject.rotation.x += y * THUMBSTICK_SPEED * (Math.PI / 180);
-
-          // Pitch begrenzen (ca. ±85°)
-          const maxPitch = 85 * (Math.PI / 180);
-          lookControls.pitchObject.rotation.x = Math.max(
-            -maxPitch,
-            Math.min(maxPitch, lookControls.pitchObject.rotation.x)
-          );
-        });
-      }
+          requestAnimationFrame(tick);
+        };
+        tick();
+      });
 
       // Start with first panorama
       loadPano(1);
