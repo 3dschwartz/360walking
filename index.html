@@ -7,59 +7,59 @@
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
   
   <script>
-    // ---------- A-Frame Komponente für Steuerknüppel-Rotation im VR-Modus ----------
-    AFRAME.registerComponent('vr-thumbstick-rotation', {
+    // ---------- A-Frame Komponente für Snap-Turn (20°-Sprünge gegen VR-Schwindel) ----------
+    AFRAME.registerComponent('vr-snap-turn', {
       schema: {
-        speed: { type: 'number', default: 90 } // Rotationsgeschwindigkeit in Grad pro Sekunde
+        angle: { type: 'number', default: 20 },     // Winkel pro Sprung in Grad
+        threshold: { type: 'number', default: 0.6 } // Wie weit der Stick gedrückt werden muss (60%)
       },
       init: function () {
         this.stickX = 0;
-        this.stickY = 0;
+        this.canSnap = true; // Sperre, damit pro Stick-Druck nur EIN Sprung passiert
 
         this.onAxisMove = this.onAxisMove.bind(this);
 
-        // Event-Listener für Steuerknüppel-Bewegungen registrieren
         this.el.addEventListener('thumbstickmoved', this.onAxisMove);
         this.el.addEventListener('axismove', this.onAxisMove);
       },
       onAxisMove: function (evt) {
         const detail = evt.detail || {};
 
-        // A-Frame thumbstickmoved liefert x und y
-        if (typeof detail.x === 'number' && typeof detail.y === 'number') {
+        // Nur die X-Achse (Links/Rechts) auslesen
+        if (typeof detail.x === 'number') {
           this.stickX = detail.x;
-          this.stickY = detail.y;
-        } 
-        // Fallback: axismove liefert ein Array [x, y]
-        else if (detail.axis && Array.isArray(detail.axis)) {
+        } else if (detail.axis && Array.isArray(detail.axis)) {
           this.stickX = detail.axis[0] || 0;
-          this.stickY = detail.axis[1] || 0;
         }
       },
-      tick: function (time, delta) {
-        const DEADZONE = 0.15; // Deadzone verhindern Ruckeln bei ungenauen Knüppeln
-
-        if (Math.abs(this.stickX) < DEADZONE && Math.abs(this.stickY) < DEADZONE) {
-          return;
-        }
-
-        const dt = delta / 1000; // Vergangene Zeit in Sekunden
+      tick: function () {
         const sky = document.querySelector('#sky');
         if (!sky) return;
 
-        // Aktuelle Rotation des Panoramas (a-sky) abrufen
+        // Stick nach RECHTS gedrückt -> Bild nach rechts drehen (20°-Sprung)
+        if (this.stickX > this.data.threshold && this.canSnap) {
+          this.rotateSky(-this.data.angle);
+          this.canSnap = false; // Sperren bis der Stick wieder losgelassen wird
+        } 
+        // Stick nach LINKS gedrückt -> Bild nach links drehen (20°-Sprung)
+        else if (this.stickX < -this.data.threshold && this.canSnap) {
+          this.rotateSky(this.data.angle);
+          this.canSnap = false; // Sperren bis der Stick wieder losgelassen wird
+        } 
+        // Stick wieder nahe der Mittelstellung -> Freigabe für den nächsten Sprung
+        else if (Math.abs(this.stickX) < 0.2) {
+          this.canSnap = true;
+        }
+      },
+      rotateSky: function (deltaAngle) {
+        const sky = document.querySelector('#sky');
         const rot = sky.getAttribute('rotation') || { x: 0, y: 0, z: 0 };
 
-        // Horizontaler Stick (X) -> Yaw / Horizontale Rotation des Bildes
-        // Vertikaler Stick (Y)   -> Pitch / Vertikale Rotation des Bildes
-        let newY = rot.y - (this.stickX * this.data.speed * dt);
-        let newX = rot.x + (this.stickY * (this.data.speed * 0.7) * dt);
+        // Nur Y-Achse (Horizontale Rotation) verändern – kein Hoch/Runter!
+        let newY = rot.y + deltaAngle;
 
-        // Vertikalen Winkel begrenzen (-85° bis +85°), um Überschlagen zu verhindern
-        newX = Math.max(-85, Math.min(85, newX));
-
-        // Neue Rotation auf das Panorama anwenden
-        sky.setAttribute('rotation', `${newX} ${newY} ${rot.z}`);
+        // Sofortiger Winkelsprung ohne Übergang
+        sky.setAttribute('rotation', `${rot.x} ${newY} ${rot.z}`);
       }
     });
   </script>
@@ -201,7 +201,7 @@
     <div class="hint">
       <kbd>P</kbd> drücken oder Button → dann in das Panorama klicken, um den Blickpunkt zu lesen und in die Zwischenablage zu kopieren.<br>
       Maus ziehen / Touch / VR-Headset: in alle Achsen schauen.<br>
-      <strong>Quest 3 / VR:</strong> Steuerknüppel der Controller = Panoramabild drehen.
+      <strong>Quest 3 / VR:</strong> Rechter Steuerknüppel (Links/Rechts) = 20°-Blicksprünge (Snap Turn).
     </div>
   </div>
 
@@ -249,18 +249,18 @@
       </a-camera>
     </a-entity>
 
-    <!-- VR / XR controllers with laser and thumbstick rotation -->
+    <!-- Linker Controller (nur Laser, keine Knüppelrotation) -->
     <a-entity
       id="leftHand"
       laser-controls="hand: left"
-      vr-thumbstick-rotation="speed: 90"
       raycaster="objects: .clickable; far: 10; lineColor: #7dd3fc; lineOpacity: 0.6"
     ></a-entity>
 
+    <!-- Rechter Controller (Laser + 20° Snap Turn) -->
     <a-entity
       id="rightHand"
       laser-controls="hand: right"
-      vr-thumbstick-rotation="speed: 90"
+      vr-snap-turn="angle: 20; threshold: 0.6"
       raycaster="objects: .clickable; far: 10; lineColor: #7dd3fc; lineOpacity: 0.6"
     ></a-entity>
 
