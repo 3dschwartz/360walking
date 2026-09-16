@@ -7,25 +7,22 @@
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
   
   <script>
-    // ---------- A-Frame Komponente für Snap-Turn (20°-Sprünge gegen VR-Schwindel) ----------
+    // ---------- A-Frame Komponente für 20° Snap Turn (VR-Schwindel vermeiden) ----------
     AFRAME.registerComponent('vr-snap-turn', {
       schema: {
         angle: { type: 'number', default: 20 },     // Winkel pro Sprung in Grad
-        threshold: { type: 'number', default: 0.6 } // Wie weit der Stick gedrückt werden muss (60%)
+        threshold: { type: 'number', default: 0.6 } // Empfindlichkeit des Sticks
       },
       init: function () {
         this.stickX = 0;
-        this.canSnap = true; // Sperre, damit pro Stick-Druck nur EIN Sprung passiert
+        this.canSnap = true;
 
         this.onAxisMove = this.onAxisMove.bind(this);
-
         this.el.addEventListener('thumbstickmoved', this.onAxisMove);
         this.el.addEventListener('axismove', this.onAxisMove);
       },
       onAxisMove: function (evt) {
         const detail = evt.detail || {};
-
-        // Nur die X-Achse (Links/Rechts) auslesen
         if (typeof detail.x === 'number') {
           this.stickX = detail.x;
         } else if (detail.axis && Array.isArray(detail.axis)) {
@@ -36,17 +33,17 @@
         const sky = document.querySelector('#sky');
         if (!sky) return;
 
-        // Stick nach RECHTS gedrückt -> Bild nach rechts drehen (20°-Sprung)
+        // Stick nach RECHTS -> Bild nach rechts drehen
         if (this.stickX > this.data.threshold && this.canSnap) {
-          this.rotateSky(-this.data.angle);
-          this.canSnap = false; // Sperren bis der Stick wieder losgelassen wird
-        } 
-        // Stick nach LINKS gedrückt -> Bild nach links drehen (20°-Sprung)
-        else if (this.stickX < -this.data.threshold && this.canSnap) {
           this.rotateSky(this.data.angle);
-          this.canSnap = false; // Sperren bis der Stick wieder losgelassen wird
+          this.canSnap = false;
         } 
-        // Stick wieder nahe der Mittelstellung -> Freigabe für den nächsten Sprung
+        // Stick nach LINKS -> Bild nach links drehen
+        else if (this.stickX < -this.data.threshold && this.canSnap) {
+          this.rotateSky(-this.data.angle);
+          this.canSnap = false;
+        } 
+        // Stick zurück in Mittelstellung -> Freigabe für nächsten Sprung
         else if (Math.abs(this.stickX) < 0.2) {
           this.canSnap = true;
         }
@@ -54,12 +51,7 @@
       rotateSky: function (deltaAngle) {
         const sky = document.querySelector('#sky');
         const rot = sky.getAttribute('rotation') || { x: 0, y: 0, z: 0 };
-
-        // Nur Y-Achse (Horizontale Rotation) verändern – kein Hoch/Runter!
-        let newY = rot.y + deltaAngle;
-
-        // Sofortiger Winkelsprung ohne Übergang
-        sky.setAttribute('rotation', `${rot.x} ${newY} ${rot.z}`);
+        sky.setAttribute('rotation', `${rot.x} ${rot.y + deltaAngle} ${rot.z}`);
       }
     });
   </script>
@@ -75,134 +67,69 @@
       overflow: hidden;
       background: #000;
     }
+    /* Panel ist standardmäßig AUSGEBLENDET (wird nur mit Taste 'P' geöffnet) */
     #ui-panel {
+      display: none;
       position: fixed;
       top: 12px;
       left: 12px;
       z-index: 9999;
-      background: rgba(15, 15, 25, 0.85);
+      background: rgba(15, 15, 25, 0.9);
       backdrop-filter: blur(8px);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.2);
       border-radius: 12px;
       padding: 14px 16px;
       color: #f0f0f0;
-      width: min(340px, calc(100vw - 24px));
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
-      font-size: 14px;
+      width: min(360px, calc(100vw - 24px));
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      font-size: 13px;
       line-height: 1.4;
     }
     #ui-panel h1 {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 600;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
       color: #7dd3fc;
-      letter-spacing: 0.02em;
     }
     .field-group {
       margin-bottom: 10px;
     }
     .field-group label {
       display: block;
-      font-size: 12px;
+      font-size: 11px;
       color: #a5b4c8;
       margin-bottom: 4px;
-      font-weight: 500;
     }
     .field-group input {
       width: 100%;
-      padding: 8px 10px;
+      padding: 8px;
       border-radius: 6px;
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      background: rgba(0, 0, 0, 0.45);
-      color: #fff;
-      font-size: 13px;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: rgba(0, 0, 0, 0.5);
+      color: #38bdf8;
+      font-family: monospace;
+      font-size: 12px;
       outline: none;
-      transition: border-color 0.15s;
-    }
-    .field-group input:focus {
-      border-color: #38bdf8;
-    }
-    .btn-row {
-      display: flex;
-      gap: 8px;
-      margin-top: 12px;
-    }
-    button {
-      flex: 1;
-      padding: 8px 12px;
-      border: none;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s, transform 0.1s;
-    }
-    button:active {
-      transform: scale(0.97);
-    }
-    #apply-btn {
-      background: #0ea5e9;
-      color: #fff;
-    }
-    #apply-btn:hover {
-      background: #0284c7;
-    }
-    #sample-btn {
-      background: #334155;
-      color: #e2e8f0;
-    }
-    #sample-btn:hover {
-      background: #475569;
-    }
-    #sample-btn.active {
-      background: #f59e0b;
-      color: #000;
     }
     .hint {
-      margin-top: 10px;
       font-size: 11px;
       color: #94a3b8;
-      line-height: 1.35;
-    }
-    .hint kbd {
-      background: rgba(255, 255, 255, 0.12);
-      padding: 1px 5px;
-      border-radius: 3px;
-      font-family: inherit;
-      font-size: 11px;
-    }
-    /* UI Panel im VR Mode ausblenden */
-    a-scene[data-is-vr="true"] ~ #ui-panel {
-      display: none;
     }
   </style>
 </head>
 <body>
 
-  <!-- Top control panel (desktop / mobile) -->
+  <!-- Mess-Panel (nur sichtbar bei Tastendruck P) -->
   <div id="ui-panel">
-    <h1>Panorama Viewer (WebXR)</h1>
-
+    <h1>Position-Sampler (Taste P)</h1>
+    <div class="hint" style="margin-bottom: 8px;">
+      Klicke an eine Stelle im Panorama, um die Daten für die Konfiguration zu lesen:
+    </div>
     <div class="field-group">
-      <label for="alias-input">Alias-Name für Panorama</label>
-      <input type="text" id="alias-input" placeholder="z.B. Eingangshalle" autocomplete="off">
+      <label>Gelesene Koordinaten & Rotation (automatisch kopiert):</label>
+      <input type="text" id="sample-output" readonly placeholder="Klicke ins Panorama...">
     </div>
-
-    <div class="field-group">
-      <label for="viewpoint-input">Blickpunkt (aus Zwischenablage)</label>
-      <input type="text" id="viewpoint-input" placeholder="Rotation z.B. 0 180 0" autocomplete="off">
-    </div>
-
-    <div class="btn-row">
-      <button id="apply-btn" type="button">Blickpunkt anwenden</button>
-      <button id="sample-btn" type="button">P – Punkt lesen</button>
-    </div>
-
-    <div class="hint">
-      <kbd>P</kbd> drücken oder Button → dann in das Panorama klicken, um den Blickpunkt zu lesen und in die Zwischenablage zu kopieren.<br>
-      Maus ziehen / Touch / VR-Headset: in alle Achsen schauen.<br>
-      <strong>Quest 3 / VR:</strong> Rechter Steuerknüppel (Links/Rechts) = 20°-Blicksprünge (Snap Turn).
-    </div>
+    <div class="hint">Drücke erneut <kbd>P</kbd>, um dieses Fenster zu schließen.</div>
   </div>
 
   <a-scene
@@ -210,7 +137,6 @@
     vr-mode-ui="enabled: true"
     renderer="antialias: true; colorManagement: true"
     background="color: #000"
-    loading-screen="enabled: true"
   >
     <a-assets timeout="15000">
       <img id="pano1" src="pano_01.JPG" crossorigin="anonymous">
@@ -218,16 +144,19 @@
       <img id="pano3" src="pano_03.JPG" crossorigin="anonymous">
     </a-assets>
 
-    <!-- Panorama sky -->
+    <!-- Panorama Himmel -->
     <a-sky
       id="sky"
       src="#pano1"
       radius="500"
-      rotation="0 -90 0"
+      rotation="0 0 0"
       class="clickable"
-    ></a-sky>
+    >
+      <!-- Behälter für Marker-Hotspots (dreht sich mit dem Himmel mit) -->
+      <a-entity id="markers-container"></a-entity>
+    </a-sky>
 
-    <!-- Camera rig -->
+    <!-- Camera rig (inklusive Controller für korrekte Handhöhe) -->
     <a-entity id="rig" position="0 1.6 0">
       <a-camera
         id="cam"
@@ -241,245 +170,171 @@
         wasd-controls="enabled: false"
         position="0 0 0"
       >
-        <!-- Mouse / touch raycaster for desktop & mobile -->
         <a-entity
           cursor="fuse: false; rayOrigin: mouse"
           raycaster="objects: .clickable; far: 1000"
         ></a-entity>
       </a-camera>
-    </a-entity>
 
-    <!-- Linker Controller (nur Laser, keine Knüppelrotation) -->
-    <a-entity
-      id="leftHand"
-      laser-controls="hand: left"
-      raycaster="objects: .clickable; far: 10; lineColor: #7dd3fc; lineOpacity: 0.6"
-    ></a-entity>
-
-    <!-- Rechter Controller (Laser + 20° Snap Turn) -->
-    <a-entity
-      id="rightHand"
-      laser-controls="hand: right"
-      vr-snap-turn="angle: 20; threshold: 0.6"
-      raycaster="objects: .clickable; far: 10; lineColor: #7dd3fc; lineOpacity: 0.6"
-    ></a-entity>
-
-    <!-- 3D Menu – visible on all devices including VR headsets -->
-    <a-entity id="menu" position="-1.8 1.5 -1.2" rotation="0 25 0">
-      <!-- Title -->
-      <a-text
-        value="Panoramen"
-        position="0 0.55 0.01"
-        align="center"
-        width="3.2"
-        color="#7dd3fc"
-        font="kelsonsans"
-      ></a-text>
-
-      <!-- Button 1 -->
+      <!-- Linker Controller -->
       <a-entity
-        class="clickable menu-btn"
-        data-pano="1"
-        position="0 0.25 0"
-        geometry="primitive: plane; width: 1.4; height: 0.32"
-        material="color: #1e293b; opacity: 0.92; shader: flat"
-        animation__hover="property: scale; to: 1.05 1.05 1.05; startEvents: mouseenter; dur: 120"
-        animation__leave="property: scale; to: 1 1 1; startEvents: mouseleave; dur: 120"
-      >
-        <a-text
-          value="1 – pano_01"
-          align="center"
-          width="2.8"
-          color="#e2e8f0"
-          position="0 0 0.01"
-        ></a-text>
-      </a-entity>
+        id="leftHand"
+        laser-controls="hand: left"
+        raycaster="objects: .clickable; far: 10; lineColor: #7dd3fc; lineOpacity: 0.6"
+      ></a-entity>
 
-      <!-- Button 2 -->
+      <!-- Rechter Controller (mit 20° Snap Turn) -->
       <a-entity
-        class="clickable menu-btn"
-        data-pano="2"
-        position="0 -0.12 0"
-        geometry="primitive: plane; width: 1.4; height: 0.32"
-        material="color: #1e293b; opacity: 0.92; shader: flat"
-        animation__hover="property: scale; to: 1.05 1.05 1.05; startEvents: mouseenter; dur: 120"
-        animation__leave="property: scale; to: 1 1 1; startEvents: mouseleave; dur: 120"
-      >
-        <a-text
-          value="2 – pano_02"
-          align="center"
-          width="2.8"
-          color="#e2e8f0"
-          position="0 0 0.01"
-        ></a-text>
-      </a-entity>
-
-      <!-- Button 3 -->
-      <a-entity
-        class="clickable menu-btn"
-        data-pano="3"
-        position="0 -0.49 0"
-        geometry="primitive: plane; width: 1.4; height: 0.32"
-        material="color: #1e293b; opacity: 0.92; shader: flat"
-        animation__hover="property: scale; to: 1.05 1.05 1.05; startEvents: mouseenter; dur: 120"
-        animation__leave="property: scale; to: 1 1 1; startEvents: mouseleave; dur: 120"
-      >
-        <a-text
-          value="3 – pano_03"
-          align="center"
-          width="2.8"
-          color="#e2e8f0"
-          position="0 0 0.01"
-        ></a-text>
-      </a-entity>
+        id="rightHand"
+        laser-controls="hand: right"
+        vr-snap-turn="angle: 20; threshold: 0.6"
+        raycaster="objects: .clickable; far: 10; lineColor: #7dd3fc; lineOpacity: 0.6"
+      ></a-entity>
     </a-entity>
 
   </a-scene>
 
   <script>
+    // =========================================================================
+    // PANORAMA & MARKER KONFIGURATION (HIER BEQUEM EDITIEREN)
+    // =========================================================================
+    const PANORAMAS = {
+      "pano1": {
+        src: "#pano1",
+        startRotation: "0 -90 0", // Blickpunkt beim Start (Pitch Yaw Roll)
+        markers: [
+          { target: "pano2", position: "3 0.5 -5", label: "Zu Panorama 2" },
+          { target: "pano3", position: "-3 0.5 -5", label: "Zu Panorama 3" }
+        ]
+      },
+      "pano2": {
+        src: "#pano2",
+        startRotation: "0 0 0",
+        markers: [
+          { target: "pano1", position: "-3 0.5 5", label: "Zu Panorama 1" },
+          { target: "pano3", position: "4 0.5 -3", label: "Zu Panorama 3" }
+        ]
+      },
+      "pano3": {
+        src: "#pano3",
+        startRotation: "0 45 0",
+        markers: [
+          { target: "pano1", position: "3 0.5 5", label: "Zu Panorama 1" },
+          { target: "pano2", position: "-4 0.5 -3", label: "Zu Panorama 2" }
+        ]
+      }
+    };
+
+    // =========================================================================
+    // VIEWER LOGIK
+    // =========================================================================
     (function () {
       const sky = document.querySelector('#sky');
-      const cam = document.querySelector('#cam');
-      const scene = document.querySelector('#scene');
-      const aliasInput = document.getElementById('alias-input');
-      const viewpointInput = document.getElementById('viewpoint-input');
-      const applyBtn = document.getElementById('apply-btn');
-      const sampleBtn = document.getElementById('sample-btn');
+      const markersContainer = document.querySelector('#markers-container');
+      const uiPanel = document.getElementById('ui-panel');
+      const sampleOutput = document.getElementById('sample-output');
 
+      let currentPanoKey = "pano1";
       let sampleMode = false;
-      let currentPano = 1;
 
-      // ---------- Switch panorama ----------
-      function loadPano(n) {
-        currentPano = n;
-        const id = '#pano' + n;
-        sky.setAttribute('src', id);
+      // ---------- Panorama laden & Marker erzeugen ----------
+      function loadPano(panoKey) {
+        const config = PANORAMAS[panoKey];
+        if (!config) return;
 
-        // Highlight active button
-        document.querySelectorAll('.menu-btn').forEach(btn => {
-          const isActive = btn.dataset.pano === String(n);
-          btn.setAttribute('material', `color: ${isActive ? '#0ea5e9' : '#1e293b'}; opacity: 0.92; shader: flat`);
-        });
-      }
+        currentPanoKey = panoKey;
+        sky.setAttribute('src', config.src);
+        sky.setAttribute('rotation', config.startRotation || "0 0 0");
 
-      // Menu clicks
-      document.querySelectorAll('.menu-btn').forEach(btn => {
-        btn.addEventListener('click', (evt) => {
-          evt.stopPropagation();
-          const n = parseInt(btn.dataset.pano, 10);
-          loadPano(n);
-        });
-      });
+        // Alte Marker entfernen
+        markersContainer.innerHTML = '';
 
-      // ---------- Sample viewpoint (key P or button) ----------
-      function setSampleMode(on) {
-        sampleMode = on;
-        sampleBtn.classList.toggle('active', on);
-        sampleBtn.textContent = on ? 'Klicke jetzt im Bild…' : 'P – Punkt lesen';
-        document.body.style.cursor = on ? 'crosshair' : '';
-      }
+        // Neue Marker aus der Konfiguration erstellen
+        if (config.markers && Array.isArray(config.markers)) {
+          config.markers.forEach(m => {
+            const markerEntity = document.createElement('a-entity');
+            markerEntity.setAttribute('class', 'clickable');
+            markerEntity.setAttribute('position', m.position);
 
-      function sampleViewpoint(intersection) {
-        if (!intersection) return;
+            // Hotspot-Kugel (Blau/Glow)
+            const sphere = document.createElement('a-sphere');
+            sphere.setAttribute('radius', '0.25');
+            sphere.setAttribute('material', 'color: #0ea5e9; opacity: 0.85; shader: flat');
+            sphere.setAttribute('animation__hover', 'property: scale; to: 1.2 1.2 1.2; startEvents: mouseenter; dur: 150');
+            sphere.setAttribute('animation__leave', 'property: scale; to: 1 1 1; startEvents: mouseleave; dur: 150');
 
-        const point = intersection.point;
-        const dir = new THREE.Vector3(point.x, point.y, point.z).normalize();
+            // Ring um die Kugel
+            const ring = document.createElement('a-ring');
+            ring.setAttribute('radius-inner', '0.28');
+            ring.setAttribute('radius-outer', '0.36');
+            ring.setAttribute('material', 'color: #ffffff; side: double; shader: flat');
 
-        const yaw = Math.atan2(-dir.x, -dir.z) * (180 / Math.PI);
-        const pitch = Math.asin(dir.y) * (180 / Math.PI);
+            // Text-Schild über dem Marker
+            const text = document.createElement('a-text');
+            text.setAttribute('value', m.label || m.target);
+            text.setAttribute('align', 'center');
+            text.setAttribute('position', '0 0.45 0');
+            text.setAttribute('scale', '1.2 1.2 1.2');
+            text.setAttribute('color', '#ffffff');
 
-        const rotStr = `${pitch.toFixed(2)} ${yaw.toFixed(2)} 0`;
+            markerEntity.appendChild(sphere);
+            markerEntity.appendChild(ring);
+            markerEntity.appendChild(text);
 
-        let uvStr = '';
-        if (intersection.uv) {
-          uvStr = ` | UV: ${intersection.uv.x.toFixed(4)},${intersection.uv.y.toFixed(4)}`;
+            // Klick-Event zum Wechseln des Panoramas
+            markerEntity.addEventListener('click', (evt) => {
+              evt.stopPropagation();
+              if (sampleMode) return; // Im Mess-Modus nicht wechseln
+              loadPano(m.target);
+            });
+
+            markersContainer.appendChild(markerEntity);
+          });
         }
-
-        const full = rotStr + uvStr;
-
-        navigator.clipboard.writeText(rotStr).then(() => {
-          viewpointInput.value = rotStr;
-          console.log('Blickpunkt kopiert:', full);
-          sampleBtn.textContent = 'Kopiert!';
-          setTimeout(() => setSampleMode(false), 900);
-        }).catch(err => {
-          console.warn('Clipboard fehlgeschlagen, Wert trotzdem gesetzt:', err);
-          viewpointInput.value = rotStr;
-          setSampleMode(false);
-        });
       }
 
-      // Click on sky while in sample mode
-      sky.addEventListener('click', (evt) => {
-        if (!sampleMode) return;
-        const inter = evt.detail && evt.detail.intersection;
-        if (inter) {
-          sampleViewpoint(inter);
-        }
-      });
+      // ---------- Mess-Modus / Taste P ----------
+      function toggleSamplePanel() {
+        sampleMode = !sampleMode;
+        uiPanel.style.display = sampleMode ? 'block' : 'none';
+        document.body.style.cursor = sampleMode ? 'crosshair' : '';
+      }
 
-      // Keyboard P
       window.addEventListener('keydown', (e) => {
         if (e.key === 'p' || e.key === 'P') {
           if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
           e.preventDefault();
-          setSampleMode(!sampleMode);
+          toggleSamplePanel();
         }
       });
 
-      sampleBtn.addEventListener('click', () => {
-        setSampleMode(!sampleMode);
+      // Klick im Mess-Modus liest die Daten aus
+      sky.addEventListener('click', (evt) => {
+        if (!sampleMode) return;
+        const inter = evt.detail && evt.detail.intersection;
+        if (!inter) return;
+
+        // Vektor auf 5m Entfernung skalierten (ideale Marker-Distanz)
+        const dir = new THREE.Vector3(inter.point.x, inter.point.y, inter.point.z).normalize();
+        const markerPos = dir.clone().multiplyScalar(5);
+
+        const yaw = Math.atan2(-dir.x, -dir.z) * (180 / Math.PI);
+        const pitch = Math.asin(dir.y) * (180 / Math.PI);
+
+        const posStr = `${markerPos.x.toFixed(2)} ${markerPos.y.toFixed(2)} ${markerPos.z.toFixed(2)}`;
+        const rotStr = `${pitch.toFixed(2)} ${yaw.toFixed(2)} 0`;
+
+        const resultText = `position: "${posStr}" | startRotation: "${rotStr}"`;
+        sampleOutput.value = resultText;
+
+        // In die Zwischenablage kopieren
+        navigator.clipboard.writeText(`position: "${posStr}"`).then(() => {
+          console.log('Marker-Position in Zwischenablage kopiert:', posStr);
+        });
       });
 
-      // ---------- Apply viewpoint ----------
-      applyBtn.addEventListener('click', () => {
-        const val = viewpointInput.value.trim();
-        if (!val) return;
-
-        const parts = val.split(/[\s,;]+/).map(parseFloat).filter(n => !isNaN(n));
-        if (parts.length < 2) {
-          alert('Ungültiges Format. Erwarte z.B. „12.34 -90.00 0“');
-          return;
-        }
-
-        const pitch = parts[0];
-        const yaw = parts[1];
-        const roll = parts[2] || 0;
-
-        const lookControls = cam.components['look-controls'];
-        if (lookControls) {
-          lookControls.pause();
-        }
-
-        cam.setAttribute('rotation', { x: pitch, y: yaw, z: roll });
-
-        setTimeout(() => {
-          if (lookControls) {
-            if (typeof lookControls.pitchObject !== 'undefined') {
-              lookControls.pitchObject.rotation.x = THREE.MathUtils.degToRad(pitch);
-              lookControls.yawObject.rotation.y = THREE.MathUtils.degToRad(yaw);
-            }
-            lookControls.play();
-          }
-        }, 50);
-
-        const alias = aliasInput.value.trim();
-        if (alias) {
-          console.log(`Alias „${alias}“ → Blickpunkt ${pitch.toFixed(2)} ${yaw.toFixed(2)} ${roll}`);
-          document.title = `Panorama – ${alias}`;
-        }
-      });
-
-      // ---------- Enter / exit VR detection ----------
-      scene.addEventListener('enter-vr', () => {
-        scene.dataset.isVr = 'true';
-      });
-      scene.addEventListener('exit-vr', () => {
-        scene.dataset.isVr = 'false';
-      });
-
-      // Start with first panorama
-      loadPano(1);
+      // Anwendung starten mit Panorama 1
+      loadPano("pano1");
     })();
   </script>
 </body>
