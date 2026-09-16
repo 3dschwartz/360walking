@@ -7,11 +7,20 @@
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
   
   <script>
-    // ---------- A-Frame Komponente für 20° Snap Turn (VR-Schwindel vermeiden) ----------
+    // ---------- Komponente: Richtet Marker automatisch immer zur Kamera aus ----------
+    AFRAME.registerComponent('look-at-center', {
+      tick: function () {
+        const pos = this.el.object3D.position;
+        // Dreht die Vorderseite (+Z) des Markers exakt zum Zentrum/zur Kamera (0,0,0)
+        this.el.object3D.lookAt(pos.x * 2, pos.y * 2, pos.z * 2);
+      }
+    });
+
+    // ---------- Komponente: 20° Snap Turn (VR-Schwindel vermeiden) ----------
     AFRAME.registerComponent('vr-snap-turn', {
       schema: {
-        angle: { type: 'number', default: 20 },     // Winkel pro Sprung in Grad
-        threshold: { type: 'number', default: 0.6 } // Empfindlichkeit des Sticks
+        angle: { type: 'number', default: 20 },
+        threshold: { type: 'number', default: 0.6 }
       },
       init: function () {
         this.stickX = 0;
@@ -30,28 +39,27 @@
         }
       },
       tick: function () {
-        const sky = document.querySelector('#sky');
-        if (!sky) return;
+        const container = document.querySelector('#pano-container');
+        if (!container) return;
 
-        // Stick nach RECHTS -> Bild nach rechts drehen
+        // Stick RECHTS -> Panorama dreht sich nach links = Blick schaut nach RECHTS
         if (this.stickX > this.data.threshold && this.canSnap) {
-          this.rotateSky(this.data.angle);
+          this.rotatePano(-this.data.angle);
           this.canSnap = false;
         } 
-        // Stick nach LINKS -> Bild nach links drehen
+        // Stick LINKS -> Panorama dreht sich nach rechts = Blick schaut nach LINKS
         else if (this.stickX < -this.data.threshold && this.canSnap) {
-          this.rotateSky(-this.data.angle);
+          this.rotatePano(this.data.angle);
           this.canSnap = false;
         } 
-        // Stick zurück in Mittelstellung -> Freigabe für nächsten Sprung
         else if (Math.abs(this.stickX) < 0.2) {
           this.canSnap = true;
         }
       },
-      rotateSky: function (deltaAngle) {
-        const sky = document.querySelector('#sky');
-        const rot = sky.getAttribute('rotation') || { x: 0, y: 0, z: 0 };
-        sky.setAttribute('rotation', `${rot.x} ${rot.y + deltaAngle} ${rot.z}`);
+      rotatePano: function (deltaAngle) {
+        const container = document.querySelector('#pano-container');
+        const rot = container.getAttribute('rotation') || { x: 0, y: 0, z: 0 };
+        container.setAttribute('rotation', `${rot.x} ${rot.y + deltaAngle} ${rot.z}`);
       }
     });
   </script>
@@ -67,9 +75,8 @@
       overflow: hidden;
       background: #000;
     }
-    /* Panel ist standardmäßig AUSGEBLENDET (wird nur mit Taste 'P' geöffnet) */
     #ui-panel {
-      display: none;
+      display: none; /* Nur bei Taste P sichtbar */
       position: fixed;
       top: 12px;
       left: 12px;
@@ -144,19 +151,21 @@
       <img id="pano3" src="pano_03.JPG" crossorigin="anonymous">
     </a-assets>
 
-    <!-- Panorama Himmel -->
-    <a-sky
-      id="sky"
-      src="#pano1"
-      radius="500"
-      rotation="0 0 0"
-      class="clickable"
-    >
-      <!-- Behälter für Marker-Hotspots (dreht sich mit dem Himmel mit) -->
-      <a-entity id="markers-container"></a-entity>
-    </a-sky>
+    <!-- ZENTRIERTER PANORAMA-CONTAINER (Exakt auf Kamera-Augenhöhe 1.6m) -->
+    <a-entity id="pano-container" position="0 1.6 0">
+      <a-sky
+        id="sky"
+        src="#pano1"
+        radius="500"
+        position="0 0 0"
+        class="clickable"
+      ></a-sky>
 
-    <!-- Camera rig (inklusive Controller für korrekte Handhöhe) -->
+      <!-- Marker-Behälter auf gleicher Ebene wie Panorama -->
+      <a-entity id="markers-container"></a-entity>
+    </a-entity>
+
+    <!-- ZENTRIERTES CAMERA RIG (Augenhöhe 1.6m) -->
     <a-entity id="rig" position="0 1.6 0">
       <a-camera
         id="cam"
@@ -180,15 +189,15 @@
       <a-entity
         id="leftHand"
         laser-controls="hand: left"
-        raycaster="objects: .clickable; far: 10; lineColor: #7dd3fc; lineOpacity: 0.6"
+        raycaster="objects: .clickable; far: 20; lineColor: #7dd3fc; lineOpacity: 0.6"
       ></a-entity>
 
-      <!-- Rechter Controller (mit 20° Snap Turn) -->
+      <!-- Rechter Controller (mit Korrektur: Stick Rechts = Blick nach Rechts) -->
       <a-entity
         id="rightHand"
         laser-controls="hand: right"
         vr-snap-turn="angle: 20; threshold: 0.6"
-        raycaster="objects: .clickable; far: 10; lineColor: #7dd3fc; lineOpacity: 0.6"
+        raycaster="objects: .clickable; far: 20; lineColor: #7dd3fc; lineOpacity: 0.6"
       ></a-entity>
     </a-entity>
 
@@ -196,31 +205,31 @@
 
   <script>
     // =========================================================================
-    // PANORAMA & MARKER KONFIGURATION (HIER BEQUEM EDITIEREN)
+    // PANORAMA & MARKER KONFIGURATION
     // =========================================================================
     const PANORAMAS = {
       "pano1": {
         src: "#pano1",
-        startRotation: "-0.19 -1.40 -4.80", // Blickpunkt beim Start (Pitch Yaw Roll)
+        startRotation: "0 -90 0",
         markers: [
-          { target: "pano2", position: "-3.11 -0.85 -3.82", label: "Zu Panorama 2" },
-          { target: "pano3", position: "3.08 -0.94 -3.83", label: "Zu Panorama 3" }
+          { target: "pano2", position: "3 0 -5", label: "Zu Panorama 2" },
+          { target: "pano3", position: "-3 0 -5", label: "Zu Panorama 3" }
         ]
       },
       "pano2": {
         src: "#pano2",
         startRotation: "0 0 0",
         markers: [
-          { target: "pano1", position: "-3 0.5 5", label: "Zu Panorama 1" },
-          { target: "pano3", position: "4 0.5 -3", label: "Zu Panorama 3" }
+          { target: "pano1", position: "-3 0 5", label: "Zu Panorama 1" },
+          { target: "pano3", position: "4 0 -3", label: "Zu Panorama 3" }
         ]
       },
       "pano3": {
         src: "#pano3",
         startRotation: "0 45 0",
         markers: [
-          { target: "pano1", position: "3 0.5 5", label: "Zu Panorama 1" },
-          { target: "pano2", position: "-4 0.5 -3", label: "Zu Panorama 2" }
+          { target: "pano1", position: "3 0 5", label: "Zu Panorama 1" },
+          { target: "pano2", position: "-4 0 -3", label: "Zu Panorama 2" }
         ]
       }
     };
@@ -230,6 +239,7 @@
     // =========================================================================
     (function () {
       const sky = document.querySelector('#sky');
+      const panoContainer = document.querySelector('#pano-container');
       const markersContainer = document.querySelector('#markers-container');
       const uiPanel = document.getElementById('ui-panel');
       const sampleOutput = document.getElementById('sample-output');
@@ -237,39 +247,43 @@
       let currentPanoKey = "pano1";
       let sampleMode = false;
 
-      // ---------- Panorama laden & Marker erzeugen ----------
       function loadPano(panoKey) {
         const config = PANORAMAS[panoKey];
         if (!config) return;
 
         currentPanoKey = panoKey;
         sky.setAttribute('src', config.src);
-        sky.setAttribute('rotation', config.startRotation || "0 0 0");
+        
+        // Start-Blickwinkel auf den Gesamtkörper anwenden
+        panoContainer.setAttribute('rotation', config.startRotation || "0 0 0");
 
         // Alte Marker entfernen
         markersContainer.innerHTML = '';
 
-        // Neue Marker aus der Konfiguration erstellen
+        // Neue Marker laden
         if (config.markers && Array.isArray(config.markers)) {
           config.markers.forEach(m => {
             const markerEntity = document.createElement('a-entity');
             markerEntity.setAttribute('class', 'clickable');
             markerEntity.setAttribute('position', m.position);
+            
+            // Automatische Ausrichtung zur Kamera hinzufügen
+            markerEntity.setAttribute('look-at-center', '');
 
-            // Hotspot-Kugel (Blau/Glow)
+            // Hotspot-Kugel
             const sphere = document.createElement('a-sphere');
             sphere.setAttribute('radius', '0.25');
             sphere.setAttribute('material', 'color: #0ea5e9; opacity: 0.85; shader: flat');
             sphere.setAttribute('animation__hover', 'property: scale; to: 1.2 1.2 1.2; startEvents: mouseenter; dur: 150');
             sphere.setAttribute('animation__leave', 'property: scale; to: 1 1 1; startEvents: mouseleave; dur: 150');
 
-            // Ring um die Kugel
+            // Ring
             const ring = document.createElement('a-ring');
             ring.setAttribute('radius-inner', '0.28');
             ring.setAttribute('radius-outer', '0.36');
             ring.setAttribute('material', 'color: #ffffff; side: double; shader: flat');
 
-            // Text-Schild über dem Marker
+            // Text
             const text = document.createElement('a-text');
             text.setAttribute('value', m.label || m.target);
             text.setAttribute('align', 'center');
@@ -281,10 +295,9 @@
             markerEntity.appendChild(ring);
             markerEntity.appendChild(text);
 
-            // Klick-Event zum Wechseln des Panoramas
             markerEntity.addEventListener('click', (evt) => {
               evt.stopPropagation();
-              if (sampleMode) return; // Im Mess-Modus nicht wechseln
+              if (sampleMode) return;
               loadPano(m.target);
             });
 
@@ -293,7 +306,6 @@
         }
       }
 
-      // ---------- Mess-Modus / Taste P ----------
       function toggleSamplePanel() {
         sampleMode = !sampleMode;
         uiPanel.style.display = sampleMode ? 'block' : 'none';
@@ -308,13 +320,11 @@
         }
       });
 
-      // Klick im Mess-Modus liest die Daten aus
       sky.addEventListener('click', (evt) => {
         if (!sampleMode) return;
         const inter = evt.detail && evt.detail.intersection;
         if (!inter) return;
 
-        // Vektor auf 5m Entfernung skalierten (ideale Marker-Distanz)
         const dir = new THREE.Vector3(inter.point.x, inter.point.y, inter.point.z).normalize();
         const markerPos = dir.clone().multiplyScalar(5);
 
@@ -324,16 +334,13 @@
         const posStr = `${markerPos.x.toFixed(2)} ${markerPos.y.toFixed(2)} ${markerPos.z.toFixed(2)}`;
         const rotStr = `${pitch.toFixed(2)} ${yaw.toFixed(2)} 0`;
 
-        const resultText = `position: "${posStr}" | startRotation: "${rotStr}"`;
-        sampleOutput.value = resultText;
+        sampleOutput.value = `position: "${posStr}" | startRotation: "${rotStr}"`;
 
-        // In die Zwischenablage kopieren
         navigator.clipboard.writeText(`position: "${posStr}"`).then(() => {
-          console.log('Marker-Position in Zwischenablage kopiert:', posStr);
+          console.log('Position kopiert:', posStr);
         });
       });
 
-      // Anwendung starten mit Panorama 1
       loadPano("pano1");
     })();
   </script>
