@@ -7,16 +7,24 @@
   <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
   
   <script>
-    // ---------- Komponente: Richtet Marker automatisch immer zur Kamera aus ----------
-    AFRAME.registerComponent('look-at-center', {
+    // ---------- Komponente: Dreht Marker/Text immer frontal zur Kamera (Billboard) ----------
+    AFRAME.registerComponent('face-camera', {
+      init: function () {
+        this.camWorldPos = new THREE.Vector3();
+      },
       tick: function () {
-        const pos = this.el.object3D.position;
-        // Dreht die Vorderseite (+Z) des Markers exakt zum Zentrum/zur Kamera (0,0,0)
-        this.el.object3D.lookAt(pos.x * 2, pos.y * 2, pos.z * 2);
+        const cam = document.querySelector('#cam');
+        if (!cam) return;
+        
+        // Exakte Weltposition der Kamera holen
+        cam.object3D.getWorldPosition(this.camWorldPos);
+        
+        // Marker richtet sich frontal zur Kamera aus
+        this.el.object3D.lookAt(this.camWorldPos);
       }
     });
 
-    // ---------- Komponente: 20° Snap Turn (VR-Schwindel vermeiden) ----------
+    // ---------- Komponente: 20° Snap Turn für den rechten Controller ----------
     AFRAME.registerComponent('vr-snap-turn', {
       schema: {
         angle: { type: 'number', default: 20 },
@@ -42,12 +50,12 @@
         const container = document.querySelector('#pano-container');
         if (!container) return;
 
-        // Stick RECHTS -> Panorama dreht sich nach links = Blick schaut nach RECHTS
+        // Stick nach RECHTS -> Panorama dreht nach links (Blick schaut nach RECHTS)
         if (this.stickX > this.data.threshold && this.canSnap) {
           this.rotatePano(-this.data.angle);
           this.canSnap = false;
         } 
-        // Stick LINKS -> Panorama dreht sich nach rechts = Blick schaut nach LINKS
+        // Stick nach LINKS -> Panorama dreht nach rechts (Blick schaut nach LINKS)
         else if (this.stickX < -this.data.threshold && this.canSnap) {
           this.rotatePano(this.data.angle);
           this.canSnap = false;
@@ -76,7 +84,7 @@
       background: #000;
     }
     #ui-panel {
-      display: none; /* Nur bei Taste P sichtbar */
+      display: none; /* Nur sichtbar bei Taste P */
       position: fixed;
       top: 12px;
       left: 12px;
@@ -126,7 +134,7 @@
 </head>
 <body>
 
-  <!-- Mess-Panel (nur sichtbar bei Tastendruck P) -->
+  <!-- Mess-Panel (Taste P) -->
   <div id="ui-panel">
     <h1>Position-Sampler (Taste P)</h1>
     <div class="hint" style="margin-bottom: 8px;">
@@ -151,7 +159,7 @@
       <img id="pano3" src="pano_03.JPG" crossorigin="anonymous">
     </a-assets>
 
-    <!-- ZENTRIERTER PANORAMA-CONTAINER (Exakt auf Kamera-Augenhöhe 1.6m) -->
+    <!-- PANORAMA-CONTAINER (Zentriert auf Augenhöhe 1.6m) -->
     <a-entity id="pano-container" position="0 1.6 0">
       <a-sky
         id="sky"
@@ -161,12 +169,12 @@
         class="clickable"
       ></a-sky>
 
-      <!-- Marker-Behälter auf gleicher Ebene wie Panorama -->
+      <!-- Marker-Behälter -->
       <a-entity id="markers-container"></a-entity>
     </a-entity>
 
-    <!-- ZENTRIERTES CAMERA RIG (Augenhöhe 1.6m) -->
-    <a-entity id="rig" position="0 1.6 0">
+    <!-- CAMERA RIG (Auf Boden 0,0,0) -->
+    <a-entity id="rig" position="0 0 0">
       <a-camera
         id="cam"
         look-controls="
@@ -177,8 +185,9 @@
           pointerLockEnabled: false;
         "
         wasd-controls="enabled: false"
-        position="0 0 0"
+        position="0 1.6 0"
       >
+        <!-- Maus/Touch Raycaster -->
         <a-entity
           cursor="fuse: false; rayOrigin: mouse"
           raycaster="objects: .clickable; far: 1000"
@@ -189,15 +198,15 @@
       <a-entity
         id="leftHand"
         laser-controls="hand: left"
-        raycaster="objects: .clickable; far: 20; lineColor: #7dd3fc; lineOpacity: 0.6"
+        raycaster="objects: .clickable; far: 1000; lineColor: #7dd3fc; lineOpacity: 0.6"
       ></a-entity>
 
-      <!-- Rechter Controller (mit Korrektur: Stick Rechts = Blick nach Rechts) -->
+      <!-- Rechter Controller (Snap Turn) -->
       <a-entity
         id="rightHand"
         laser-controls="hand: right"
         vr-snap-turn="angle: 20; threshold: 0.6"
-        raycaster="objects: .clickable; far: 20; lineColor: #7dd3fc; lineOpacity: 0.6"
+        raycaster="objects: .clickable; far: 1000; lineColor: #7dd3fc; lineOpacity: 0.6"
       ></a-entity>
     </a-entity>
 
@@ -205,7 +214,7 @@
 
   <script>
     // =========================================================================
-    // PANORAMA & MARKER KONFIGURATION
+    // PANORAMA & MARKER KONFIGURATION (HIER EDITIEREN)
     // =========================================================================
     const PANORAMAS = {
       "pano1": {
@@ -254,7 +263,7 @@
         currentPanoKey = panoKey;
         sky.setAttribute('src', config.src);
         
-        // Start-Blickwinkel auf den Gesamtkörper anwenden
+        // Start-Blickwinkel setzen
         panoContainer.setAttribute('rotation', config.startRotation || "0 0 0");
 
         // Alte Marker entfernen
@@ -263,27 +272,28 @@
         // Neue Marker laden
         if (config.markers && Array.isArray(config.markers)) {
           config.markers.forEach(m => {
-            const markerEntity = document.createElement('a-entity');
-            markerEntity.setAttribute('class', 'clickable');
-            markerEntity.setAttribute('position', m.position);
+            const markerGroup = document.createElement('a-entity');
+            markerGroup.setAttribute('position', m.position);
             
-            // Automatische Ausrichtung zur Kamera hinzufügen
-            markerEntity.setAttribute('look-at-center', '');
+            // IMMER FRONTAL ZUR KAMERA DREHEN
+            markerGroup.setAttribute('face-camera', '');
 
-            // Hotspot-Kugel
+            // Kugel als anklickbares Objekt
             const sphere = document.createElement('a-sphere');
+            sphere.setAttribute('class', 'clickable'); // Wichtig für Raycaster!
             sphere.setAttribute('radius', '0.25');
             sphere.setAttribute('material', 'color: #0ea5e9; opacity: 0.85; shader: flat');
             sphere.setAttribute('animation__hover', 'property: scale; to: 1.2 1.2 1.2; startEvents: mouseenter; dur: 150');
             sphere.setAttribute('animation__leave', 'property: scale; to: 1 1 1; startEvents: mouseleave; dur: 150');
 
-            // Ring
+            // Äußerer Ring
             const ring = document.createElement('a-ring');
+            ring.setAttribute('class', 'clickable');
             ring.setAttribute('radius-inner', '0.28');
             ring.setAttribute('radius-outer', '0.36');
             ring.setAttribute('material', 'color: #ffffff; side: double; shader: flat');
 
-            // Text
+            // Lesbarer Frontal-Text
             const text = document.createElement('a-text');
             text.setAttribute('value', m.label || m.target);
             text.setAttribute('align', 'center');
@@ -291,17 +301,21 @@
             text.setAttribute('scale', '1.2 1.2 1.2');
             text.setAttribute('color', '#ffffff');
 
-            markerEntity.appendChild(sphere);
-            markerEntity.appendChild(ring);
-            markerEntity.appendChild(text);
+            markerGroup.appendChild(sphere);
+            markerGroup.appendChild(ring);
+            markerGroup.appendChild(text);
 
-            markerEntity.addEventListener('click', (evt) => {
+            // Klick-Event für Panoramawechsel
+            const handleClick = (evt) => {
               evt.stopPropagation();
               if (sampleMode) return;
               loadPano(m.target);
-            });
+            };
 
-            markersContainer.appendChild(markerEntity);
+            sphere.addEventListener('click', handleClick);
+            ring.addEventListener('click', handleClick);
+
+            markersContainer.appendChild(markerGroup);
           });
         }
       }
@@ -320,6 +334,7 @@
         }
       });
 
+      // Klick im Mess-Modus
       sky.addEventListener('click', (evt) => {
         if (!sampleMode) return;
         const inter = evt.detail && evt.detail.intersection;
